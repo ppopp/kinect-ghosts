@@ -1,0 +1,21 @@
+uniform sampler2D live_video_texture;
+uniform sampler2D live_depth_texture;
+uniform float live_depth_cutoff;
+uniform int count;
+
+varying vec2 texcoord;
+
+void main()
+{
+	if (count > -1) {
+		vec4 depthColor = texture2D(live_depth_texture, texcoord);
+		gl_FragColor = texture2D(live_video_texture, texcoord);
+		if (depthColor.r > live_depth_cutoff) {
+			gl_FragColor.a = 0.1;
+		}
+
+		if (depthColor.r == 0.0) {
+			gl_FragColor.a = 0.1;
+		}
+	}
+}
