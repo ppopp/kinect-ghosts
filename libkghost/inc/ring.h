@@ -26,8 +26,6 @@ extern "C" {
 		size_t index, 
 		void** pp_element);
 
-	
-
 #ifdef __cplusplus
 }
 #endif

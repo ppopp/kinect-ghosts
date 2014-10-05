@@ -10,6 +10,10 @@ extern "C" {
 #endif
 
 	typedef struct freerec_s* freerec_handle_t;
+	typedef double timestamp_t;
+	/*
+	typedef unsigned timestamp_t;
+	*/
 
 	status_t freerec_create(
 		freenect_frame_mode* p_video_mode,
@@ -33,25 +37,25 @@ extern "C" {
 		size_t clip_index,
 		size_t frame_index,
 		void** p_data,
-		uint32_t* p_timestamp);
+		timestamp_t* p_timestamp);
 
 	status_t freerec_clip_depth_frame(
 		freerec_handle_t handle,
 		size_t clip_index,
 		size_t frame_index,
 		void** p_data,
-		uint32_t* p_timestamp);
+		timestamp_t* p_timestamp);
 
 
 	status_t freerec_capture_video(
 		freerec_handle_t handle,
 		void* data,
-		uint32_t timestamp);
+		timestamp_t timestamp);
 
 	status_t freerec_capture_depth(
 		freerec_handle_t handle,
 		void* data,
-		uint32_t timestamp);
+		timestamp_t timestamp);
 
 #ifdef __cplusplus
 }

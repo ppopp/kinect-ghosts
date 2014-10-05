@@ -69,7 +69,7 @@ status_t memory_pool_create(
 		(minReserve > maxReserve) ||
 		(maxReserve < 1) ||
 		(maxBytes < (maxReserve * chunkSize)) ||
-		(periodMicroseconds < 0))
+		(periodMicroseconds <= 0))
 	{
 		return ERR_INVALID_ARGUMENT;
 	}

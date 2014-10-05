@@ -24,10 +24,14 @@
 #define ERR_FULL (-11)
 #define ERR_INVALID_TIMESTAMP (-12)
 
+#define ERR_FAILED_TIMER (-13)
+
 
 typedef int status_t;
 typedef unsigned char byte_t;
 typedef unsigned char bool_t;
+
+typedef int (*comparison_function)(const void*, const void*);
 
 #define TRUE (1)
 #define FALSE (0)

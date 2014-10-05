@@ -4,6 +4,7 @@
 #include "gl_pixel_buffer.h"
 #include "freerec.h"
 #include "vector.h"
+#include "timer.h"
 
 #include "log.h"
 #include "command.h"
@@ -46,6 +47,13 @@ static log_level _print_log_level = LogLevelDebug;
 /* collect 5 seconds of video */
 static const size_t _max_recorded_bytes = 640 * 480 * 4 * 30 * 5 * 4;
 
+typedef struct _layer_s {
+	float depth;
+	double time;
+	double next_time;
+	size_t frame;
+} layer_t;
+
 typedef struct _gl_ghosts {
 	/* Shader variables */
 	const char* vertex_shader_path;
@@ -75,6 +83,7 @@ typedef struct _gl_ghosts {
 		GLint position;
 	} attributes;
 
+
 	double cameraAngle;
 	float depth_cutoff;
 	float depth_scale;
@@ -90,10 +99,12 @@ typedef struct _gl_ghosts {
 	commander cmdr;
 
 	freerec_handle_t freerec;
-	size_t frame_counters[TEXTURE_CAPACITY];
 	bool_t do_record;
+	layer_t layers[TEXTURE_CAPACITY];
+	timer_handle_t record_timer;
+	timer_handle_t playback_timer;
 	
-	uint32_t timestamp;
+	double record_timestamp;
 } gl_ghosts; 
 
 
@@ -144,6 +155,20 @@ static int _command_set(const char* cmd, void* data);
 static int _start_recording(gl_ghosts* p_gl_ghosts);
 static int _stop_recording(gl_ghosts* p_gl_ghosts);
 
+/* layer stuff */
+static status_t _init_layer(
+	float depth, 
+	freerec_handle_t freerec, 
+	size_t freerec_clip_index, 
+	layer_t* p_layer);
+static status_t _layer_get_next_frame(
+		layer_t* p_layer,
+		double time_delta,
+		freerec_handle_t freerec,
+		size_t freerec_clip_index,
+		void** p_video_buffer,
+		void** p_depth_buffer);
+
 int main(int argc, const char* argv[]) {
 	gl_ghosts glGhosts;
 	void* userData = NULL;
@@ -186,8 +211,8 @@ int _init(void* data) {
 	p_gl_ghosts->gl_live_depth_buffer = NULL;
 	p_gl_ghosts->gl_live_video_buffer = NULL;
 	for (index = 0; index < TEXTURE_CAPACITY; index++) {
-		p_gl_ghosts->gl_video_buffers[TEXTURE_CAPACITY] = NULL;
-		p_gl_ghosts->gl_depth_buffers[TEXTURE_CAPACITY] = NULL;
+		p_gl_ghosts->gl_video_buffers[index] = NULL;
+		p_gl_ghosts->gl_depth_buffers[index] = NULL;
 		p_gl_ghosts->uniforms.video_textures[index] = 0;
 		p_gl_ghosts->uniforms.depth_textures[index] = 0;
 		p_gl_ghosts->uniforms.depth_cutoffs[index] = -1;
@@ -217,9 +242,9 @@ int _init(void* data) {
 	command_set_callback(p_gl_ghosts->cmdr, _command_set);
 
 	p_gl_ghosts->freerec = NULL;
+	p_gl_ghosts->record_timer = NULL;
+	p_gl_ghosts->playback_timer = NULL;
 	p_gl_ghosts->do_record = FALSE;
-	p_gl_ghosts->timestamp = 1;
-	memset(p_gl_ghosts->frame_counters, 0, sizeof(size_t) * TEXTURE_CAPACITY);
 
 	/* initialize kinect device and start callbacks */
 	error = _init_freenect(p_gl_ghosts, _ghosts_resolution);
@@ -241,6 +266,24 @@ int _init(void* data) {
 	error = freerec_action(p_gl_ghosts->freerec);
 	if (0 != error) {
 		LOG_ERROR("ghosts", NULL, "failed to init freerec");
+		return error;
+	}
+
+	for (index = 0; index < TEXTURE_CAPACITY; index++) {
+		p_gl_ghosts->layers[index].depth = 0.0f;
+		p_gl_ghosts->layers[index].time = 0.0;
+		p_gl_ghosts->layers[index].frame = 0;
+	}
+
+	error = timer_create(&(p_gl_ghosts->record_timer));
+	if (0 != error) {
+		LOG_ERROR("ghosts", NULL, "failed to create record timer");
+		return error;
+	}
+
+	error = timer_create(&(p_gl_ghosts->playback_timer));
+	if (0 != error) {
+		LOG_ERROR("ghosts", NULL, "failed to create playback timer");
 		return error;
 	}
 
@@ -267,7 +310,7 @@ int _init_opengl(gl_ghosts* p_gl_ghosts) {
 	}
 		
 	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); 
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_COLOR); 
 	glDisable(GL_DEPTH_TEST);
 
 	/* create video pixel streaming buffer */
@@ -556,8 +599,8 @@ void _display(void* data) {
 	size_t     index        = 0;
 	void*      video_buffer = NULL;
 	void*      depth_buffer = NULL;
-	uint32_t   timestamp    = 0;
 	int        error        = 0;
+	double     delta        = 0.0;
 
 	_downsample_counter++;
 	if ((_downsample_counter % DOWNSAMPLE) != 0) {
@@ -568,10 +611,21 @@ void _display(void* data) {
 		return;
 	}
 
+	/* get time since last callback */
+	error = timer_current(p_gl_ghosts->playback_timer, &delta);
+	if (0 != error) {
+		LOG_ERROR("ghosts", NULL, "error getting playback time");
+		return; 
+	}
+	error = timer_reset(p_gl_ghosts->playback_timer);
+	if (0 != error) {
+		LOG_ERROR("ghosts", NULL, "error reseting playback time");
+		return; 
+	}
+
 	error = freerec_clip_count(p_gl_ghosts->freerec, &num_clips);
 	if (0 != error) {
 		LOG_ERROR("ghosts", NULL, "error getting clip count");
-		num_frames = 0;
 		return; 
 	}
 
@@ -587,7 +641,7 @@ void _display(void* data) {
 		 * want to make this specific to each clip in the future */
 		glUniform1f(
 			p_gl_ghosts->uniforms.depth_cutoffs[index], 
-			p_gl_ghosts->depth_cutoff);
+			p_gl_ghosts->layers[index].depth);
 		/* get video and depth information from freerec */
 		error = freerec_clip_frame_count(p_gl_ghosts->freerec, index, &num_frames);
 		if (0 != error) {
@@ -602,31 +656,26 @@ void _display(void* data) {
 		if (num_frames > 0) {
 			video_buffer = NULL;
 			depth_buffer = NULL;
+			error = _layer_get_next_frame(
+				&(p_gl_ghosts->layers[index]),
+				delta,
+				p_gl_ghosts->freerec,
+				index,
+				&video_buffer,
+				&depth_buffer);
+			if (0 != error) {
+				LOG_ERROR("ghosts", NULL, "error getting frame");
+				num_frames = 0;
+			}
+
+
+			/*
 			p_gl_ghosts->frame_counters[index]++;
 			if (p_gl_ghosts->frame_counters[index] >= num_frames) {
 				p_gl_ghosts->frame_counters[index] = 0;
 			}
+			*/
 			
-			error = freerec_clip_video_frame(
-				p_gl_ghosts->freerec,
-				index,
-				p_gl_ghosts->frame_counters[index],
-				&video_buffer,
-				&timestamp);
-			if (0 != error) {
-				LOG_ERROR("ghosts", NULL, "error getting frames");
-				return;
-			}
-			error = freerec_clip_depth_frame(
-				p_gl_ghosts->freerec,
-				index,
-				p_gl_ghosts->frame_counters[index],
-				&depth_buffer,
-				&timestamp);
-			if (0 != error) {
-				LOG_ERROR("ghosts", NULL, "error getting frames");
-				return;
-			}
 			if (video_buffer) {
 				gl_pixel_buffer_set_data(
 					p_gl_ghosts->gl_video_buffers[index],
@@ -650,13 +699,11 @@ void _display(void* data) {
 			}
 		}
 	}
-	/* TODO: currently setting same depth cutoff for all.  Will probably
-	 * want to make this specific to each clip in the future */
+	/* display live data */
 	glUniform1f(
 		p_gl_ghosts->uniforms.live_depth_cutoff,
 		p_gl_ghosts->depth_cutoff);
 	
-	/* display live data */
 	gl_pixel_buffer_set_data(
 		p_gl_ghosts->gl_live_video_buffer,
 		p_gl_ghosts->video_buffer);
@@ -852,10 +899,17 @@ void _video_cb(freenect_device *dev, void *video, uint32_t timestamp) {
 	}
 
 	if (TRUE == p_ghosts->do_record) {
+		error = timer_current(
+			p_ghosts->record_timer, 
+			&(p_ghosts->record_timestamp));
+		if (0 != error) {
+			LOG_ERROR("ghosts", NULL, "error getting record timestamp");
+			return;
+		}
 		error = freerec_capture_video(
 			p_ghosts->freerec, 
 			video, 
-			p_ghosts->timestamp);
+			p_ghosts->record_timestamp);
 		if (0 != error) {
 			LOG_ERROR("ghosts", NULL, "error capturing video frame");
 			return;
@@ -874,18 +928,14 @@ void _depth_cb(freenect_device *dev, void *depth, uint32_t timestamp) {
 	}
 
 	if (p_ghosts->do_record) {
-		/* error = freerec_capture_depth(p_ghosts->freerec, depth, timestamp); */
 		error = freerec_capture_depth(
 			p_ghosts->freerec, 
 			depth, 
-			p_ghosts->timestamp);
+			p_ghosts->record_timestamp);
 		if (0 != error) {
 			LOG_ERROR("ghosts", NULL, "error capturing depth frame");
 			return;
 		}
-		/* fake the vide/depth timestamps so they match.  Timestamps returned from 
-		 * callbacks are slightly off */
-		p_ghosts->timestamp++;
 	}
 }
 
@@ -904,6 +954,10 @@ void _cleanup(void* data) {
 	p_gl_ghosts->depth_buffer = NULL;
 	command_destroy(p_gl_ghosts->cmdr);
 	freerec_release(p_gl_ghosts->freerec);
+	timer_release(p_gl_ghosts->playback_timer);
+	p_gl_ghosts->playback_timer = NULL;
+	timer_release(p_gl_ghosts->record_timer);
+	p_gl_ghosts->record_timer = NULL;
 	/* TODO: lots of other cleanup */
 }
 
@@ -991,12 +1045,21 @@ int _start_recording(gl_ghosts* p_gl_ghosts) {
 		return NO_ERROR;
 	}
 
+	status = timer_reset(p_gl_ghosts->record_timer);
+	if (NO_ERROR != status) {
+		LOG_ERROR("ghosts", NULL, "failed to reset record timer");
+		return status;
+	}
+
 	p_gl_ghosts->do_record = TRUE;
+
 	return NO_ERROR;
 }
 
 int _stop_recording(gl_ghosts* p_gl_ghosts) {
 	status_t status    = NO_ERROR;
+	size_t   count     = 0;
+	size_t   last_clip = 0;
 
 	/* check that we were recording in the first place */
 	if (FALSE == p_gl_ghosts->do_record) {
@@ -1014,6 +1077,147 @@ int _stop_recording(gl_ghosts* p_gl_ghosts) {
 		return status;
 	}
 
+	/* initialize new layer for display */
+	status = freerec_clip_count(p_gl_ghosts->freerec, &count);
+	if (NO_ERROR != status) {
+		LOG_ERROR("ghosts", NULL, "failed to get clip count");
+		return status;
+	}
+	if (count >= TEXTURE_CAPACITY) {
+		LOG_WARNING("ghosts", NULL, "cannot create any more clips");
+		return NO_ERROR;
+	}
+
+	last_clip = count - 1;
+	status = _init_layer(
+		p_gl_ghosts->depth_cutoff,
+		p_gl_ghosts->freerec,
+		last_clip,
+		&(p_gl_ghosts->layers[last_clip]));
+	if (NO_ERROR != status) {
+		LOG_ERROR("ghosts", NULL, "failed to init layer");
+		return status;
+	}
+
 	return NO_ERROR;
 }
+
+status_t _init_layer(
+	float depth, 
+	freerec_handle_t freerec, 
+	size_t freerec_clip_index, 
+	layer_t* p_layer)
+{
+	status_t status  = NO_ERROR;
+	void*    p_dummy = NULL;
+
+	p_layer->depth = depth;
+	p_layer->frame = 0;
+	/* get timestamp of first frame */
+	status = freerec_clip_video_frame(
+		freerec,
+		freerec_clip_index,
+		0,
+		&p_dummy,
+		&(p_layer->time));
+
+	if (NO_ERROR != status) {
+		LOG_ERROR("ghosts", NULL, "failed to get first timestamp");
+		return status;
+	}
+	/* get next timestamp */
+	status = freerec_clip_video_frame(
+		freerec,
+		freerec_clip_index,
+		1,
+		&p_dummy,
+		&(p_layer->next_time));
+
+	if (NO_ERROR != status) {
+		LOG_ERROR("ghosts", NULL, "failed to get next timestamp");
+		return status;
+	}
+
+	return NO_ERROR;
+}
+
+status_t _layer_get_next_frame(
+		layer_t* p_layer,
+		double time_delta,
+		freerec_handle_t freerec,
+		size_t freerec_clip_index,
+		void** p_video_buffer,
+		void** p_depth_buffer)
+{
+	status_t error = NO_ERROR;
+	double   timestamp = 0;
+	size_t   count = 0;
+	size_t   next_frame = 0;
+	void*    dummy = NULL;
+
+	/* determine index of next frame */
+	p_layer->time += time_delta;
+	if (p_layer->time >= p_layer->next_time) {
+		/* increment frame */
+		p_layer->frame += 1;
+		error = freerec_clip_frame_count(freerec, freerec_clip_index, &count);
+		if (0 != error) {
+			LOG_ERROR("ghosts", NULL, "error getting frames");
+			return error;
+		}
+		/* check for rollover of clip and loop if necessary */
+		if (p_layer->frame >= count) {
+			p_layer->frame = 0;
+			error = freerec_clip_video_frame(
+				freerec, 
+				freerec_clip_index,
+				0,
+				&dummy,
+				&(p_layer->time));
+			if (0 != error) {
+				LOG_ERROR("ghosts", NULL, "error getting frames");
+				return error;
+			}
+		}
+		/* get timestamp of next frame */
+		next_frame = p_layer->frame + 1;
+		if (next_frame >= count) {
+			next_frame = 0;
+		}
+		error = freerec_clip_video_frame(
+			freerec, 
+			freerec_clip_index,
+			next_frame,
+			&dummy,
+			&(p_layer->next_time));
+		if (0 != error) {
+			LOG_ERROR("ghosts", NULL, "error getting frames");
+			return error;
+		}
+	}
+
+	error = freerec_clip_video_frame(
+		freerec,
+		freerec_clip_index,
+		p_layer->frame,
+		p_video_buffer,
+		&timestamp);
+	if (0 != error) {
+		LOG_ERROR("ghosts", NULL, "error getting frames");
+		return error;
+	}
+	error = freerec_clip_depth_frame(
+		freerec,
+		freerec_clip_index,
+		p_layer->frame,
+		p_depth_buffer,
+		&timestamp);
+	if (0 != error) {
+		LOG_ERROR("ghosts", NULL, "error getting frames");
+		return error;
+	}
+
+	return NO_ERROR;
+}
+
 

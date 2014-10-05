@@ -170,9 +170,11 @@ const char* _trim(
 	if (len) {
 		if (end > 0) {
 			pos = end - 1;
-			while (testFunc(str[pos]) && (pos >= 0)) {
+			while (testFunc(str[pos])) {
 				end--;
-				pos--;
+				if (pos == 0) {
+					break;
+				}
 			}
 		}
 		*len = end;

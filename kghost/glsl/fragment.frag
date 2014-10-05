@@ -49,12 +49,29 @@ float add_sampler(
 	in float best_depth) 
 {
 	vec4 depth_color = texture2D(depth_texture, texcoord);
+	vec4 new_color = vec4(0.0, 0.0, 0.0, 1.0);
+	float alpha = smooth_alpha(depth_color.r, depth_cutoff);
+
 	if (depth_color.r != 0.0) {
 		if (depth_color.r < best_depth) {
-			gl_FragColor = texture2D(video_texture, texcoord);
-			gl_FragColor.a = smooth_alpha(depth_color.r, depth_cutoff);
-			return depth_color.r;
+			if (alpha > 0.0) {
+				new_color = texture2D(video_texture, texcoord);
+				new_color.a = alpha;
+				if (alpha >= 1.0) {
+					gl_FragColor = new_color;
+				}
+				else {
+					gl_FragColor = gl_FragColor + new_color;
+				}
+				return depth_color.r;
+			}
 		}
+		else if (gl_FragColor.a < 1.0) {
+			new_color = texture2D(video_texture, texcoord);
+			new_color.a = alpha;
+			gl_FragColor = new_color + gl_FragColor;
+		}
+			
 	}
 	return best_depth;	
 }

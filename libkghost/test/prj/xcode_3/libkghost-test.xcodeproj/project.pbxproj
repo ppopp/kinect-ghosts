@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXFileReference section */
+		A166082E18AB20D600D9E28A /* test_ring.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = test_ring.cpp; sourceTree = "<group>"; };
+		A166082F18AB20D600D9E28A /* test_timer.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = test_timer.cpp; sourceTree = "<group>"; };
 		A1AC6BF6176E80C100768236 /* test_vector.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = test_vector.cpp; path = ../../src/test_vector.cpp; sourceTree = SOURCE_ROOT; };
 		A1AC6C1E176E8A8400768236 /* test_memory_pool.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = test_memory_pool.cpp; sourceTree = "<group>"; };
 		A1AC6C1F176E8A8400768236 /* test_rb_tree.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = test_rb_tree.cpp; sourceTree = "<group>"; };
@@ -28,6 +30,8 @@
 		A1AC6C1C176E81AB00768236 /* src */ = {
 			isa = PBXGroup;
 			children = (
+				A166082E18AB20D600D9E28A /* test_ring.cpp */,
+				A166082F18AB20D600D9E28A /* test_timer.cpp */,
 				A1F8EBD31785BEA2009282D0 /* test_freerec.cpp */,
 				A1AC6C32176E921000768236 /* test_stack.cpp */,
 				A1AC6C1E176E8A8400768236 /* test_memory_pool.cpp */,
@@ -67,6 +71,8 @@
 /* Begin PBXProject section */
 		08FB7793FE84155DC02AAC07 /* Project object */ = {
 			isa = PBXProject;
+			attributes = {
+			};
 			buildConfigurationList = 1DEB919308733D9F0010E9CD /* Build configuration list for PBXProject "libkghost-test" */;
 			compatibilityVersion = "Xcode 3.1";
 			developmentRegion = English;

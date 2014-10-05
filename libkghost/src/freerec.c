@@ -35,7 +35,7 @@ static status_t _freerec_capture_data(
 	size_t frame_data_offset,
 	size_t data_size,
 	void* data,
-	uint32_t timestamp);
+	timestamp_t timestamp);
 static status_t _freerec_clip_frame(
 	freerec_handle_t handle,
 	size_t clip_index,
@@ -82,7 +82,7 @@ status_t freerec_create(
 	p_freerec->frame_size = 
 		p_video_mode->bytes + 
 		p_depth_mode->bytes + 
-		sizeof(uint32_t);
+		sizeof(timestamp_t);
 	p_freerec->current_frame = NULL;
 	p_freerec->memory_pool = NULL;
 	p_freerec->clip = NULL;
@@ -119,14 +119,6 @@ status_t freerec_create(
 		freerec_release(p_freerec);
 		return err;
 	}
-
-	/*
-	err = freerec_action(p_freerec);
-	if (NO_ERROR != err) {
-		freerec_release(p_freerec);
-		return err;
-	}
-	*/
 
 	*p_handle = p_freerec;
 	return NO_ERROR;
@@ -251,7 +243,7 @@ status_t freerec_clip_video_frame(
 	size_t clip_index,
 	size_t frame_index,
 	void** p_data,
-	uint32_t* p_timestamp)
+	timestamp_t* p_timestamp)
 {
 	status_t err = NO_ERROR;
 	char* frame_data = NULL;
@@ -273,7 +265,7 @@ status_t freerec_clip_video_frame(
 	}
 
 	*p_data = (void*)&(frame_data[handle->video_offset]);
-	*p_timestamp = *((uint32_t*)&(frame_data[handle->timestamp_offset]));
+	*p_timestamp = *((timestamp_t*)&(frame_data[handle->timestamp_offset]));
 
 #if FREEREC_LOG_TRACE
 	LOG_DEBUG("freerec_clip_video_frame", NULL, "enter");
@@ -286,7 +278,7 @@ status_t freerec_clip_depth_frame(
 	size_t clip_index,
 	size_t frame_index,
 	void** p_data,
-	uint32_t* p_timestamp)
+	timestamp_t* p_timestamp)
 {
 	status_t err = NO_ERROR;
 	char* frame_data = NULL;
@@ -308,7 +300,7 @@ status_t freerec_clip_depth_frame(
 	}
 
 	*p_data = (void*)&(frame_data[handle->depth_offset]);
-	*p_timestamp = *((uint32_t*)&(frame_data[handle->timestamp_offset]));
+	*p_timestamp = *((timestamp_t*)&(frame_data[handle->timestamp_offset]));
 
 #if FREEREC_LOG_TRACE
 	LOG_DEBUG("freerec_clip_depth_frame", NULL, "exit");
@@ -319,7 +311,7 @@ status_t freerec_clip_depth_frame(
 status_t freerec_capture_video(
 	freerec_handle_t handle,
 	void* data,
-	uint32_t timestamp)
+	timestamp_t timestamp)
 {
 	status_t status = NO_ERROR;
 #if FREEREC_LOG_TRACE
@@ -347,7 +339,7 @@ status_t freerec_capture_video(
 status_t freerec_capture_depth(
 	freerec_handle_t handle,
 	void* data,
-	uint32_t timestamp)
+	timestamp_t timestamp)
 {
 	status_t status = NO_ERROR;
 #if FREEREC_LOG_TRACE
@@ -378,23 +370,23 @@ status_t _freerec_capture_data(
 	size_t frame_data_offset,
 	size_t data_size,
 	void* data,
-	uint32_t timestamp)
+	timestamp_t timestamp)
 {
-	uint32_t current_timestamp = 0;
-	status_t err = NO_ERROR;
+	timestamp_t current_timestamp = 0;
+	status_t    err               = NO_ERROR;
 
 	if ((NULL == handle) || (NULL == data)) {
 		return ERR_NULL_POINTER;
 	}
 
 	current_timestamp = 
-		*((uint32_t*)&(handle->current_frame[handle->timestamp_offset]));
+		*((timestamp_t*)&(handle->current_frame[handle->timestamp_offset]));
 	if (timestamp > current_timestamp) {
 		/* copy data and wait for other half */
 		memcpy(
 			&(handle->current_frame[handle->timestamp_offset]),
 			&timestamp,
-			sizeof(uint32_t));
+			sizeof(timestamp_t));
 		memcpy(
 			&(handle->current_frame[frame_data_offset]),
 			data,
@@ -418,7 +410,7 @@ status_t _freerec_capture_data(
 		memcpy(
 			&(handle->current_frame[handle->timestamp_offset]),
 			&timestamp,
-			sizeof(uint32_t));
+			sizeof(timestamp_t));
 	}
 	else {
 		return ERR_INVALID_TIMESTAMP;
@@ -556,3 +548,4 @@ status_t _freerec_clear_current_frame(freerec_handle_t handle) {
 	memset(handle->current_frame, 0, handle->frame_size);
 	return NO_ERROR;
 }
+

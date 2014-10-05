@@ -9,97 +9,135 @@ ifndef BUILD_ARCH
 	include arch.mak
 endif
 
-# output product info
-OUTNAME := ghosts
-OUTDIR := bin
-OUTEXT := 
-DEBUG_POSTFIX := d
+# uncomment this to include IPP libraries 
+#ifndef IPP_LIB_DIR
+	#include ipp.mak
+#endif
 
-# compiler flags / search paths
-INCDIRS := inc /lol/include ../libkghost/inc
-SRCDIRS := src
+# output product info
+OUT_NAME := ghosts
+OUT_DIR := bin
+OUT_EXT := 
+DEBUG_POSTFIX := 
+
+# search paths for source files
+INCDIRS := $(INCDIRS) inc ../libkghost/inc
+SRCDIRS := $(SRCDIRS) src
+
+# preprocessor definitions
+PPDEFINES := $(PPDEFINES) 
+PPDEFINES32 := $(PPDEFINES) 
+PPDEFINES64 := $(PPDEFINES) 
+
+ifdef BUILD_PLATFORM
+PPDEFINES32 := $(PPDEFINES32) $(BUILD_PLATFORM)_32
+PPDEFINES64 := $(PPDEFINES64) $(BUILD_PLATFORM)_64
+endif
+
+SRC_EXTS := .c .cc .cpp
+HEADER_EXTS := .h
+
+# there are a bunch of depecration warnigns about glu & glut that I hate seeing
+CFLAGS := $(CFLAGS) -Wno-deprecated
+
+#CXX = g++
+#CC = gcc
+#AR = ar
+
 FRAMEWORKS := OpenGL GLUT
+
 # Libraries that use this makefile system can be added here.  Simply add the
-# directories of the makefiles to the PROJECTDIRS variable and they will be
+# directories of the makefiles to the PROJECT_DIRS variable and they will be
 # automatically linked in to the application. Remember to still add the names
 # of the libraries to LINK_RELEASE_LIBS and LINK_DEBUG_LIBS
-PROJECTDIRS := ../libkghost
+PROJECT_DIRS := $(PROJECT_DIRS) ../libkghost
+
+LINK_LIBS := $(LINK_LIBS) kghost freenect
+LINK_RELEASE_LIBS := $(LINK_LIBS) 
+LINK_DEBUG_LIBS := $(LINK_LIBS) 
+LINK_RELEASE_32_LIBS := $(LINK_RELEASE_LIBS) $(IPP_LIBS_32)
+LINK_RELEASE_64_LIBS := $(LINK_RELEASE_LIBS) $(IPP_LIBS_64)
+LINK_DEBUG_32_LIBS := $(LINK_DEBUG_LIBS) $(IPP_LIBS_32)
+LINK_DEBUG_64_LIBS := $(LINK_DEBUG_LIBS) $(IPP_LIBS_64)
 # If you have code that uses other libraries you can add in their directories here
-LIBDIRS := /lol/lib
-LIBDIRS_DEBUG32 := $(LIBDIRS) 
-LIBDIRS_DEBUG64 := $(LIBDIRS) 
-LIBDIRS_RELEASE32 := $(LIBDIRS) 
-LIBDIRS_RELEASE64 := $(LIBDIRS) 
-LINK_LIBS := GLEW freenect
-LINK_RELEASE_LIBS := $(LINK_LIBS) kghost
-LINK_DEBUG_LIBS := $(LINK_LIBS) kghostd
-PPDEFINES := 
+LIB_DIRS := 
+LIB_DIRS_DEBUG := $(LIB_DIRS)
+LIB_DIRS_RELEASE := $(LIB_DIRS)
+LIB_DIRS_DEBUG_32 := $(LIB_DIRS_DEBUG) $(IPP_LIB32_DIR)
+LIB_DIRS_DEBUG_64 := $(LIB_DIRS_DEBUG) $(IPP_LIB64_DIR) 
+LIB_DIRS_RELEASE_32 := $(LIB_DIRS_RELEASE) $(IPP_LIB32_DIR)
+LIB_DIRS_RELEASE_64 := $(LIB_DIRS_RELEASE) $(IPP_LIB64_DIR)
+
 LFLAGS := 
+LFLAGS_DEBUG := $(LFLAGS)
+LFLAGS_RELEASE := $(LFLAGS)
+LFLAGS_DEBUG_32 := $(LFLAGS_DEBUG) $(LDFLAGS32)
+LFLAGS_DEBUG_64 := $(LFLAGS_DEBUG) $(LDFLAGS64)
+LFLAGS_RELEASE_32 := $(LFLAGS_RELEASE) $(LDFLAGS32)
+LFLAGS_RELEASE_64 := $(LFLAGS_RELEASE) $(LDFLAGS64)
 
 # file extensions
 SRC_EXTS := .c .cc .cpp
 HEADER_EXTS := .h
 
 # location of make files to be called before this one
-BUILDDEPS := ../libkghost
+BUILDDEPS := $(PROJECT_DIRS)
 
 # files to be copied into output directory
-COPYFILES_DEBUG32 := 
-COPYFILES_DEBUG64 := 
-COPYFILES_RELEASE32 := 
-COPYFILES_RELEASE64 := 
+COPYFILES :=
+COPYFILES_DEBUG := $(COPYFILES)
+COPYFILES_RELEASE := $(COPYFILES)
+COPYFILES_DEBUG_32 := $(COPYFILES_DEBUG)
+COPYFILES_DEBUG_64 := $(COPYFILES_DEBUG)
+COPYFILES_RELEASE_32 := $(COPYFILES_RELEASE)
+COPYFILES_RELEASE_64 := $(COPYFILES_RELEASE)
 
 #####################################################################
 ### most users of this makefile won't need to edit anything below.###
 #####################################################################
 
-LIBDIRS_DEBUG32 := $(LIBDIRS_DEBUG32) $(foreach libdir, $(PROJECTDIRS), $(libdir)/lib/debug/32)
-LIBDIRS_DEBUG64 := $(LIBDIRS_DEBUG64) $(foreach libdir, $(PROJECTDIRS), $(libdir)/lib/debug/64)
-LIBDIRS_RELEASE32 := $(LIBDIRS_RELEASE32) $(foreach libdir, $(PROJECTDIRS), $(libdir)/lib/release/32)
-LIBDIRS_RELEASE64 := $(LIBDIRS_RELEASE64) $(foreach libdir, $(PROJECTDIRS), $(libdir)/lib/release/64)
+### Add project information ###
+# add project library directories
+LIB_DIRS_DEBUG_32 := $(LIB_DIRS_DEBUG_32) $(foreach projdir, $(PROJECT_DIRS), $(projdir)/lib/debug/32)
+LIB_DIRS_DEBUG_64 := $(LIB_DIRS_DEBUG_64) $(foreach projdir, $(PROJECT_DIRS), $(projdir)/lib/debug/64)
+LIB_DIRS_RELEASE_32 := $(LIB_DIRS_RELEASE_32) $(foreach projdir, $(PROJECT_DIRS), $(projdir)/lib/release/32)
+LIB_DIRS_RELEASE_64 := $(LIB_DIRS_RELEASE_64) $(foreach projdir, $(PROJECT_DIRS), $(projdir)/lib/release/64)
 
+### add library link directory flags ###
 LFLAGS := $(LFLAGS) $(foreach framework, $(FRAMEWORKS), -framework $(framework))
-#CFLAGS := $(CFLAGS) $(foreach framework, $(FRAMEWORKS), -framework $(framework))
-LFLAGS_RELEASE32 := $(LFLAGS) $(LDFLAGS32) $(foreach LIBDIRS_RELEASE32, $(LIBDIRS_RELEASE32), -L$(LIBDIRS_RELEASE32)) 
-LFLAGS_RELEASE64 := $(LFLAGS) $(LDFLAGS64) $(foreach LIBDIRS_RELEASE64, $(LIBDIRS_RELEASE64), -L$(LIBDIRS_RELEASE64)) 
-LFLAGS_DEBUG32 := $(LFLAGS) $(LDFLAGS32) $(foreach LIBDIRS_DEBUG32, $(LIBDIRS_DEBUG32), -L$(LIBDIRS_DEBUG32)) 
-LFLAGS_DEBUG64 := $(LFLAGS) $(LDFLAGS64) $(foreach LIBDIRS_DEBUG64, $(LIBDIRS_DEBUG64), -L$(LIBDIRS_DEBUG64)) 
+LFLAGS_RELEASE_32 := $(LFLAGS) $(LFLAGS_RELEASE_32) $(foreach LIB_DIRS_RELEASE_32, $(LIB_DIRS_RELEASE_32), -L$(LIB_DIRS_RELEASE_32)) 
+LFLAGS_RELEASE_64 := $(LFLAGS) $(LFLAGS_RELEASE_64) $(foreach LIB_DIRS_RELEASE_64, $(LIB_DIRS_RELEASE_64), -L$(LIB_DIRS_RELEASE_64)) 
+LFLAGS_DEBUG_32 := $(LFLAGS) $(LFLAGS_DEBUG_32) $(foreach LIB_DIRS_DEBUG_32, $(LIB_DIRS_DEBUG_32), -L$(LIB_DIRS_DEBUG_32)) 
+LFLAGS_DEBUG_64 := $(LFLAGS) $(LFLAGS_DEBUG_64) $(foreach LIB_DIRS_DEBUG_64, $(LIB_DIRS_DEBUG_64), -L$(LIB_DIRS_DEBUG_64)) 
 
-LIBFLAGS_RELEASE := $(foreach LINK_RELEASE_LIBS, $(LINK_RELEASE_LIBS), -l$(LINK_RELEASE_LIBS))
-LIBFLAGS_DEBUG := $(foreach LINK_DEBUG_LIBS, $(LINK_DEBUG_LIBS), -l$(LINK_DEBUG_LIBS))
+LIBFLAGS_RELEASE_32 := $(foreach library, $(LINK_RELEASE_32_LIBS), -l$(library))
+LIBFLAGS_RELEASE_64 := $(foreach library, $(LINK_RELEASE_64_LIBS), -l$(library))
+LIBFLAGS_DEBUG_32 := $(foreach library, $(LINK_DEBUG_32_LIBS), -l$(library))
+LIBFLAGS_DEBUG_64 := $(foreach library, $(LINK_DEBUG_64_LIBS), -l$(library))
 
-LIBFLAGS_RELEASE32 := $(LIBFLAGS_RELEASE)
-LIBFLAGS_RELEASE64 := $(LIBFLAGS_RELEASE)
-LIBFLAGS_DEBUG32 := $(LIBFLAGS_DEBUG)
-LIBFLAGS_DEBUG64 := $(LIBFLAGS_DEBUG)
+OUT_DIR_DEBUG := $(OUT_DIR)/debug
+OUT_DIR_DEBUG_32 := $(OUT_DIR_DEBUG)/32
+OUT_DIR_DEBUG_64 := $(OUT_DIR_DEBUG)/64
+OUT_DIR_RELEASE := $(OUT_DIR)/release
+OUT_DIR_RELEASE_32 := $(OUT_DIR_RELEASE)/32
+OUT_DIR_RELEASE_64 := $(OUT_DIR_RELEASE)/64
 
-OUTDIR_DEBUG := $(OUTDIR)/debug
-OUTDIR_DEBUG32 := $(OUTDIR_DEBUG)/32
-OUTDIR_DEBUG64 := $(OUTDIR_DEBUG)/64
-OUTDIR_RELEASE := $(OUTDIR)/release
-OUTDIR_RELEASE32 := $(OUTDIR_RELEASE)/32
-OUTDIR_RELEASE64 := $(OUTDIR_RELEASE)/64
-
-OBJDIR := obj
-DEBUG_OBJDIR := $(OBJDIR)/debug
-DEBUG_OBJDIR32 := $(DEBUG_OBJDIR)/32
-DEBUG_OBJDIR64 := $(DEBUG_OBJDIR)/64
-RELEASE_OBJDIR := $(OBJDIR)/release
-RELEASE_OBJDIR32 := $(RELEASE_OBJDIR)/32
-RELEASE_OBJDIR64 := $(RELEASE_OBJDIR)/64
+OBJ_DIR := obj
+DEBUG_OBJ_DIR := $(OBJ_DIR)/debug
+DEBUG_OBJ_DIR_32 := $(DEBUG_OBJ_DIR)/32
+DEBUG_OBJ_DIR_64 := $(DEBUG_OBJ_DIR)/64
+RELEASE_OBJ_DIR := $(OBJ_DIR)/release
+RELEASE_OBJ_DIR_32 := $(RELEASE_OBJ_DIR)/32
+RELEASE_OBJ_DIR_64 := $(RELEASE_OBJ_DIR)/64
 
 CFLAGS := $(CFLAGS) $(foreach INCDIRS, $(INCDIRS), -I$(INCDIRS))
-CFLAGS := $(CFLAGS) $(foreach PPDEFINES, $(PPDEFINES), -D$(PPDEFINES))
 CFLAGS := $(CFLAGS) -fPIC -Wall 
 CFLAGS_DEBUG := $(CFLAGS) -g
-CFLAGS_DEBUG32 := $(CFLAGS_DEBUG) $(CFLAGS32)
-CFLAGS_DEBUG64 := $(CFLAGS_DEBUG) $(CFLAGS64)
+CFLAGS_DEBUG32 := $(CFLAGS_DEBUG) $(CFLAGS32) $(foreach PPDEFINES32, $(PPDEFINES32), -D$(PPDEFINES32))
+CFLAGS_DEBUG64 := $(CFLAGS_DEBUG) $(CFLAGS64) $(foreach PPDEFINES64, $(PPDEFINES64), -D$(PPDEFINES64))
 CFLAGS_RELEASE := $(CFLAGS) -DNDEBUG -O2
-CFLAGS_RELEASE32 := $(CFLAGS_RELEASE) $(CFLAGS32)
-CFLAGS_RELEASE64 := $(CFLAGS_RELEASE) $(CFLAGS64)
-
-CC = gcc
-AR = ar
+CFLAGS_RELEASE32 := $(CFLAGS_RELEASE) $(CFLAGS32) $(foreach PPDEFINES32, $(PPDEFINES32), -D$(PPDEFINES32))
+CFLAGS_RELEASE64 := $(CFLAGS_RELEASE) $(CFLAGS64) $(foreach PPDEFINES64, $(PPDEFINES64), -D$(PPDEFINES64))
 
 find_sources_with_ext = $(foreach SRCDIR, $(1), $(wildcard $(SRCDIR)/*$(EXT)))
 create_objects_with_ext = $(patsubst %$(EXT), %.o, $(patsubst %, $(1)/%, $(notdir $(call find_sources_with_ext, $(2)))))
@@ -113,149 +151,149 @@ HEADERS += $(foreach EXT, $(HEADER_EXTS), $(call find_sources_with_ext, $(INCDIR
 VPATH += $(foreach SRCDIRS, $(SRCDIRS), $(SRCDIRS):)
 
 # set target object files
-RELEASE_OBJS32 := $(call create_objects, $(RELEASE_OBJDIR32), $(SRCDIRS))
-RELEASE_OBJS64 := $(call create_objects, $(RELEASE_OBJDIR64), $(SRCDIRS))
-DEBUG_OBJS32 := $(call create_objects, $(DEBUG_OBJDIR32), $(SRCDIRS))
-DEBUG_OBJS64 := $(call create_objects, $(DEBUG_OBJDIR64), $(SRCDIRS))
+RELEASE_OBJS32 := $(call create_objects, $(RELEASE_OBJ_DIR_32), $(SRCDIRS))
+RELEASE_OBJS64 := $(call create_objects, $(RELEASE_OBJ_DIR_64), $(SRCDIRS))
+DEBUG_OBJS32 := $(call create_objects, $(DEBUG_OBJ_DIR_32), $(SRCDIRS))
+DEBUG_OBJS64 := $(call create_objects, $(DEBUG_OBJ_DIR_64), $(SRCDIRS))
 
-.PHONY: clean debug debug32 debug64 release release32 release64 dependencies dist_clean post $(BUILDDEPS) $(LIBFLAGS_RELEASE) $(LIBFLAGS_DEBUG)
+.PHONY: clean debug debug32 debug64 release release32 release64 dependencies distclean post $(BUILDDEPS) $(LIBFLAGS_RELEASE_64) $(LIBFLAGS_RELEASE_32) $(LIBFLAGS_DEBUG_32) $(LIBFLAGS_DEBUG_64)
 
-#all: $(BUILDDEPS) debug release post
 all: $(BUILDDEPS) debug64 release64 post
 debug: debug32 debug64
-debug32: $(BUILDDEPS) $(OUTDIR_DEBUG32)/$(OUTNAME)$(DEBUG_POSTFIX)$(OUTEXT)
-debug64: $(BUILDDEPS) $(OUTDIR_DEBUG64)/$(OUTNAME)$(DEBUG_POSTFIX)$(OUTEXT)
+debug32: $(OUT_DIR_DEBUG_32)/$(OUT_NAME)$(DEBUG_POSTFIX)$(OUT_EXT)
+debug64: $(OUT_DIR_DEBUG_64)/$(OUT_NAME)$(DEBUG_POSTFIX)$(OUT_EXT)
 release: release32 release64
-release32: $(BUILDDEPS) $(OUTDIR_RELEASE32)/$(OUTNAME)$(OUTEXT)
-release64: $(BUILDDEPS) $(OUTDIR_RELEASE64)/$(OUTNAME)$(OUTEXT)
-dist_clean: $(BUILDDEPS) clean
-post: $(COPYFILES_DEBUG32) $(COPYFILES_RELEASE32) $(COPYFILES_DEBUG64) $(COPYFILES_RELEASE64)
+release32: $(OUT_DIR_RELEASE_32)/$(OUT_NAME)$(OUT_EXT)
+release64: $(OUT_DIR_RELEASE_64)/$(OUT_NAME)$(OUT_EXT)
+distclean: $(BUILDDEPS) clean
+post: $(COPYFILES_DEBUG_32) $(COPYFILES_RELEASE_32) $(COPYFILES_DEBUG_64) $(COPYFILES_RELEASE_64)
+dependencies: $(BUILDDEPS)
 
 clean: 
 	rm -f $(DEBUG_OBJS32)
 	rm -f $(DEBUG_OBJS64)
 	rm -f $(RELEASE_OBJS32)
 	rm -f $(RELEASE_OBJS64)
-	rm -f $(OUTDIR_RELEASE32)/$(OUTNAME)$(OUT_EXT)
-	rm -f $(OUTDIR_RELEASE64)/$(OUTNAME)$(OUT_EXT)
-	rm -f $(OUTDIR_DEBUG32)/$(OUTNAME)$(DEBUG_POSTFIX)$(OUT_EXT)
-	rm -f $(OUTDIR_DEBUG64)/$(OUTNAME)$(DEBUG_POSTFIX)$(OUT_EXT)
+	rm -f $(OUT_DIR_RELEASE_32)/$(OUT_NAME)$(OUT_EXT)
+	rm -f $(OUT_DIR_RELEASE_64)/$(OUT_NAME)$(OUT_EXT)
+	rm -f $(OUT_DIR_DEBUG_32)/$(OUT_NAME)$(DEBUG_POSTFIX)$(OUT_EXT)
+	rm -f $(OUT_DIR_DEBUG_64)/$(OUT_NAME)$(DEBUG_POSTFIX)$(OUT_EXT)
 
-$(COPYFILES_DEBUG32): debug $(BUILDDEPS)
-	cp $@ $(OUTDIR_DEBUG32)
+$(COPYFILES_DEBUG_32): debug $(BUILDDEPS)
+	cp $@ $(OUT_DIR_DEBUG_32)
 
-$(COPYFILES_DEBUG64): debug $(BUILDDEPS)
-	cp $@ $(OUTDIR_DEBUG64)
+$(COPYFILES_DEBUG_64): debug $(BUILDDEPS)
+	cp $@ $(OUT_DIR_DEBUG_64)
 
-$(COPYFILES_RELEASE32): release $(BUILDDEPS)
-	cp $@ $(OUTDIR_RELEASE32)
+$(COPYFILES_RELEASE_32): release $(BUILDDEPS)
+	cp $@ $(OUT_DIR_RELEASE_32)
 
-$(COPYFILES_RELEASE64): release $(BUILDDEPS)
-	cp $@ $(OUTDIR_RELEASE64)
+$(COPYFILES_RELEASE_64): release $(BUILDDEPS)
+	cp $@ $(OUT_DIR_RELEASE_64)
 
 $(BUILDDEPS):
 	cd $@ && $(MAKE) $(MAKECMDGOALS)
 
-$(OUTDIR_RELEASE32)/$(OUTNAME)$(OUTEXT): $(RELEASE_OBJS32) $(LIBFLAGS_RELEASE32) 
-	@mkdir -p $(OUTDIR)
-	@mkdir -p $(OUTDIR_RELEASE)
-	@mkdir -p $(OUTDIR_RELEASE32)
+$(OUT_DIR_RELEASE_32)/$(OUT_NAME)$(OUT_EXT): $(RELEASE_OBJS32) $(LIBFLAGS_RELEASE_32) | dependencies
+	@mkdir -p $(OUT_DIR)
+	@mkdir -p $(OUT_DIR_RELEASE)
+	@mkdir -p $(OUT_DIR_RELEASE_32)
 	rm -f $@
-	$(CC) $(LFLAGS_RELEASE32) $^ -o $@
+	$(CXX) $(LFLAGS_RELEASE_32) $^ -o $@
 
-$(OUTDIR_RELEASE64)/$(OUTNAME)$(OUTEXT): $(RELEASE_OBJS64) $(LIBFLAGS_RELEASE64)
-	@mkdir -p $(OUTDIR)
-	@mkdir -p $(OUTDIR_RELEASE)
-	@mkdir -p $(OUTDIR_RELEASE64)
+$(OUT_DIR_RELEASE_64)/$(OUT_NAME)$(OUT_EXT): $(RELEASE_OBJS64) $(LIBFLAGS_RELEASE_64) | dependencies
+	@mkdir -p $(OUT_DIR)
+	@mkdir -p $(OUT_DIR_RELEASE)
+	@mkdir -p $(OUT_DIR_RELEASE_64)
 	rm -f $@
-	$(CC) $(LFLAGS_RELEASE64) $^ -o $@
+	$(CXX) $(LFLAGS_RELEASE_64) $^ -o $@
 
-$(OUTDIR_DEBUG32)/$(OUTNAME)$(DEBUG_POSTFIX)$(OUTEXT): $(DEBUG_OBJS32) $(LIBFLAGS_DEBUG32)
-	@mkdir -p $(OUTDIR)
-	@mkdir -p $(OUTDIR_DEBUG)
-	@mkdir -p $(OUTDIR_DEBUG32)
+$(OUT_DIR_DEBUG_32)/$(OUT_NAME)$(DEBUG_POSTFIX)$(OUT_EXT): $(DEBUG_OBJS32) $(LIBFLAGS_DEBUG_32) | dependencies
+	@mkdir -p $(OUT_DIR)
+	@mkdir -p $(OUT_DIR_DEBUG)
+	@mkdir -p $(OUT_DIR_DEBUG_32)
 	rm -f $@
-	$(CC) $(LFLAGS_DEBUG32) $^ -o $@
+	$(CXX) $(LFLAGS_DEBUG_32) $^ -o $@
 
-$(OUTDIR_DEBUG64)/$(OUTNAME)$(DEBUG_POSTFIX)$(OUTEXT): $(DEBUG_OBJS64) $(LIBFLAGS_DEBUG64)
-	@mkdir -p $(OUTDIR)
-	@mkdir -p $(OUTDIR_DEBUG)
-	@mkdir -p $(OUTDIR_DEBUG64)
+$(OUT_DIR_DEBUG_64)/$(OUT_NAME)$(DEBUG_POSTFIX)$(OUT_EXT): $(DEBUG_OBJS64) $(LIBFLAGS_DEBUG_64) | dependencies
+	@mkdir -p $(OUT_DIR)
+	@mkdir -p $(OUT_DIR_DEBUG)
+	@mkdir -p $(OUT_DIR_DEBUG_64)
 	rm -f $@
-	$(CC) $(LFLAGS_DEBUG64) $^ -o $@
+	$(CXX) $(LFLAGS_DEBUG_64) $^ -o $@
 
 # compile .c files
-$(DEBUG_OBJDIR32)/%.o: %.c $(HEADERS)
-	@mkdir -p $(OBJDIR)
-	@mkdir -p $(DEBUG_OBJDIR)
-	@mkdir -p $(DEBUG_OBJDIR32)
+$(DEBUG_OBJ_DIR_32)/%.o: %.c $(HEADERS)
+	@mkdir -p $(OBJ_DIR)
+	@mkdir -p $(DEBUG_OBJ_DIR)
+	@mkdir -p $(DEBUG_OBJ_DIR_32)
 	$(CC) -c -o $@ $< $(CFLAGS_DEBUG32)
 
-$(DEBUG_OBJDIR64)/%.o: %.c $(HEADERS)
-	@mkdir -p $(OBJDIR)
-	@mkdir -p $(DEBUG_OBJDIR)
-	@mkdir -p $(DEBUG_OBJDIR64)
+$(DEBUG_OBJ_DIR_64)/%.o: %.c $(HEADERS)
+	@mkdir -p $(OBJ_DIR)
+	@mkdir -p $(DEBUG_OBJ_DIR)
+	@mkdir -p $(DEBUG_OBJ_DIR_64)
 	$(CC) -c -o $@ $< $(CFLAGS_DEBUG64)
 
-$(RELEASE_OBJDIR32)/%.o: %.c $(HEADERS)
-	@mkdir -p $(OBJDIR)
-	@mkdir -p $(RELEASE_OBJDIR)
-	@mkdir -p $(RELEASE_OBJDIR32)
+$(RELEASE_OBJ_DIR_32)/%.o: %.c $(HEADERS)
+	@mkdir -p $(OBJ_DIR)
+	@mkdir -p $(RELEASE_OBJ_DIR)
+	@mkdir -p $(RELEASE_OBJ_DIR_32)
 	$(CC) -c -o $@ $< $(CFLAGS_RELEASE32)
 
-$(RELEASE_OBJDIR64)/%.o: %.c $(HEADERS)
-	@mkdir -p $(OBJDIR)
-	@mkdir -p $(RELEASE_OBJDIR)
-	@mkdir -p $(RELEASE_OBJDIR64)
+$(RELEASE_OBJ_DIR_64)/%.o: %.c $(HEADERS)
+	@mkdir -p $(OBJ_DIR)
+	@mkdir -p $(RELEASE_OBJ_DIR)
+	@mkdir -p $(RELEASE_OBJ_DIR_64)
 	$(CC) -c -o $@ $< $(CFLAGS_RELEASE64)
 
 # compile .cc files
-$(DEBUG_OBJDIR32)/%.o: %.cc $(HEADERS)
-	@mkdir -p $(OBJDIR)
-	@mkdir -p $(DEBUG_OBJDIR)
-	@mkdir -p $(DEBUG_OBJDIR32)
-	$(CC) -c -o $@ $< $(CFLAGS_DEBUG32)
+$(DEBUG_OBJ_DIR_32)/%.o: %.cc $(HEADERS)
+	@mkdir -p $(OBJ_DIR)
+	@mkdir -p $(DEBUG_OBJ_DIR)
+	@mkdir -p $(DEBUG_OBJ_DIR_32)
+	$(CXX) -c -o $@ $< $(CFLAGS_DEBUG32)
 
-$(DEBUG_OBJDIR64)/%.o: %.cc $(HEADERS)
-	@mkdir -p $(OBJDIR)
-	@mkdir -p $(DEBUG_OBJDIR)
-	@mkdir -p $(DEBUG_OBJDIR64)
-	$(CC) -c -o $@ $< $(CFLAGS_DEBUG64)
+$(DEBUG_OBJ_DIR_64)/%.o: %.cc $(HEADERS)
+	@mkdir -p $(OBJ_DIR)
+	@mkdir -p $(DEBUG_OBJ_DIR)
+	@mkdir -p $(DEBUG_OBJ_DIR_64)
+	$(CXX) -c -o $@ $< $(CFLAGS_DEBUG64)
 
-$(RELEASE_OBJDIR32)/%.o: %.cc $(HEADERS)
-	@mkdir -p $(OBJDIR)
-	@mkdir -p $(RELEASE_OBJDIR)
-	@mkdir -p $(RELEASE_OBJDIR32)
-	$(CC) -c -o $@ $< $(CFLAGS_RELEASE32)
+$(RELEASE_OBJ_DIR_32)/%.o: %.cc $(HEADERS)
+	@mkdir -p $(OBJ_DIR)
+	@mkdir -p $(RELEASE_OBJ_DIR)
+	@mkdir -p $(RELEASE_OBJ_DIR_32)
+	$(CXX) -c -o $@ $< $(CFLAGS_RELEASE32)
 
-$(RELEASE_OBJDIR64)/%.o: %.cc $(HEADERS)
-	@mkdir -p $(OBJDIR)
-	@mkdir -p $(RELEASE_OBJDIR)
-	@mkdir -p $(RELEASE_OBJDIR64)
-	$(CC) -c -o $@ $< $(CFLAGS_RELEASE64)
+$(RELEASE_OBJ_DIR_64)/%.o: %.cc $(HEADERS)
+	@mkdir -p $(OBJ_DIR)
+	@mkdir -p $(RELEASE_OBJ_DIR)
+	@mkdir -p $(RELEASE_OBJ_DIR_64)
+	$(CXX) -c -o $@ $< $(CFLAGS_RELEASE64)
 
 # compile .cpp files
-$(DEBUG_OBJDIR32)/%.o: %.cpp $(HEADERS)
-	@mkdir -p $(OBJDIR)
-	@mkdir -p $(DEBUG_OBJDIR)
-	@mkdir -p $(DEBUG_OBJDIR32)
-	$(CC) -c -o $@ $< $(CFLAGS_DEBUG32)
+$(DEBUG_OBJ_DIR_32)/%.o: %.cpp $(HEADERS)
+	@mkdir -p $(OBJ_DIR)
+	@mkdir -p $(DEBUG_OBJ_DIR)
+	@mkdir -p $(DEBUG_OBJ_DIR_32)
+	$(CXX) -c -o $@ $< $(CFLAGS_DEBUG32)
 
-$(DEBUG_OBJDIR64)/%.o: %.cpp $(HEADERS)
-	@mkdir -p $(OBJDIR)
-	@mkdir -p $(DEBUG_OBJDIR)
-	@mkdir -p $(DEBUG_OBJDIR64)
-	$(CC) -c -o $@ $< $(CFLAGS_DEBUG64)
+$(DEBUG_OBJ_DIR_64)/%.o: %.cpp $(HEADERS)
+	@mkdir -p $(OBJ_DIR)
+	@mkdir -p $(DEBUG_OBJ_DIR)
+	@mkdir -p $(DEBUG_OBJ_DIR_64)
+	$(CXX) -c -o $@ $< $(CFLAGS_DEBUG64)
 
-$(RELEASE_OBJDIR32)/%.o: %.cpp $(HEADERS)
-	@mkdir -p $(OBJDIR)
-	@mkdir -p $(RELEASE_OBJDIR)
-	@mkdir -p $(RELEASE_OBJDIR32)
-	$(CC) -c -o $@ $< $(CFLAGS_RELEASE32)
+$(RELEASE_OBJ_DIR_32)/%.o: %.cpp $(HEADERS)
+	@mkdir -p $(OBJ_DIR)
+	@mkdir -p $(RELEASE_OBJ_DIR)
+	@mkdir -p $(RELEASE_OBJ_DIR_32)
+	$(CXX) -c -o $@ $< $(CFLAGS_RELEASE32)
 
-$(RELEASE_OBJDIR64)/%.o: %.cpp $(HEADERS)
-	@mkdir -p $(OBJDIR)
-	@mkdir -p $(RELEASE_OBJDIR)
-	@mkdir -p $(RELEASE_OBJDIR64)
-	$(CC) -c -o $@ $< $(CFLAGS_RELEASE64)
+$(RELEASE_OBJ_DIR_64)/%.o: %.cpp $(HEADERS)
+	@mkdir -p $(OBJ_DIR)
+	@mkdir -p $(RELEASE_OBJ_DIR)
+	@mkdir -p $(RELEASE_OBJ_DIR_64)
+	$(CXX) -c -o $@ $< $(CFLAGS_RELEASE64)
 
