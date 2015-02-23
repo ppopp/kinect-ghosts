@@ -8,6 +8,9 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+	/** \addtogroup freerec
+	 * @{
+	 */
 
 	typedef struct freerec_s* freerec_handle_t;
 	typedef double timestamp_t;
@@ -56,6 +59,8 @@ extern "C" {
 		freerec_handle_t handle,
 		void* data,
 		timestamp_t timestamp);
+
+	/** @} */
 
 #ifdef __cplusplus
 }

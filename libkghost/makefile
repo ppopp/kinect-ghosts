@@ -21,7 +21,7 @@ OUTEXT := .a
 DEBUG_POSTFIX := 
 
 # search paths for source files
-INCDIRS := $(INCDIRS) inc
+INCDIRS := $(INCDIRS) inc /usr/local/include
 SRCDIRS := $(SRCDIRS) src
 
 # preprocessor definitions

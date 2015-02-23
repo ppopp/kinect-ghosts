@@ -23,7 +23,7 @@ DEBUG_POSTFIX :=
 # gtest files
 GTESTDIR := ./gtest-1.6.0
 # compiler flags / search paths
-INCDIRS := $(INCDIRS) $(GTESTDIR)/include $(GTESTDIR) ../inc
+INCDIRS := $(INCDIRS) $(GTESTDIR)/include $(GTESTDIR) ../inc /usr/local/include
 SRCDIRS := $(SRCDIRS) src
 
 # preprocessor definitions

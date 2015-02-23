@@ -1,148 +1,96 @@
 #include "log.h"
-
-#include <stddef.h>
-#include <stdio.h>
 #include <stdarg.h>
-#include <stdlib.h>
 
-typedef struct _log_listener {
-	log_cb callback;
-	log_level level;
-	struct _log_listener* next;
-} log_listener;
+static int _log_not_initialized = 1;
+static void _log_initialize();
 
-static log_listener* _first_listener = NULL;
-static size_t _max_message_buffer_size = 1024;
+static FILE* _log_error_stream = NULL;
+static FILE* _log_warning_stream = NULL;
+static FILE* _log_info_stream = NULL;
+static FILE* _log_debug_stream = NULL;
 
-static void _add_listener_to_list(log_listener* listener);
-static void _remove_listener_from_list(log_listener* listener);
-static log_listener* _find_listener(log_cb callback);
+static const char* _log_format = "[%s %s:%d]";
 
-int log_add_callback(log_cb callback, log_level logLevel) {
-	log_listener* listener = NULL;
-
-	if (callback == NULL) {
-		return -1;
+void log_error(const char* file, int line, const char* format, ...) {
+	_log_initialize();
+	if (_log_error_stream) {
+		fprintf(_log_error_stream, _log_format, "error", file, line);
+		va_list args;
+	 	va_start(args, format);
+		vfprintf(_log_error_stream, format, args);
+		va_end(args);
+		fprintf(_log_error_stream, "\n");
 	}
-
-	listener = (log_listener*)malloc(sizeof(log_listener));
-	if (listener == NULL) {
-		return -1;
-	}
-	listener->callback = callback;
-	listener->level = logLevel;
-	listener->next = NULL;
-	_add_listener_to_list(listener);
-	return 0;
 }
 
-void log_remove_callback(log_cb callback) {
-	log_listener* listener = NULL;
-
-	listener = _find_listener(callback);
-	if (NULL == listener) {
-		return;
+void log_warning(const char* file, int line, const char* format, ...) {
+	_log_initialize();
+	if (_log_warning_stream) {
+		fprintf(_log_warning_stream, _log_format, "warning", file, line);
+		va_list args;
+	 	va_start(args, format);
+		vfprintf(_log_warning_stream, format, args);
+		va_end(args);
+		fprintf(_log_warning_stream, "\n");
 	}
-	_remove_listener_from_list(listener);
-	free(listener);
 }
 
-const char* log_level_str(log_level level) {
+void log_info(const char* file, int line, const char* format, ...) {
+	_log_initialize();
+	if (_log_info_stream) {
+		fprintf(_log_info_stream, _log_format, "info", file, line);
+		va_list args;
+	 	va_start(args, format);
+		vfprintf(_log_info_stream, format, args);
+		va_end(args);
+		fprintf(_log_info_stream, "\n");
+	}
+}
+
+void log_debug(const char* file, int line, const char* format, ...) {
+	_log_initialize();
+	if (_log_debug_stream) {
+		fprintf(_log_debug_stream, _log_format, "debug", file, line);
+		va_list args;
+	 	va_start(args, format);
+		vfprintf(_log_debug_stream, format, args);
+		va_end(args);
+		fprintf(_log_debug_stream, "\n");
+	}
+}
+
+void log_set_stream(FILE* file, log_level_t level) {
+	_log_initialize();
 	switch (level) {
-		case LogLevelError:
-			return "error";
-
-		case LogLevelWarning:
-			return "warning";
-
-		case LogLevelInfo:
-			return "info";
-
-		case LogLevelDebug:
-			return "debug";
-
-		default:
-			return "";
+		case LOG_LEVEL_ERROR:
+			_log_error_stream = file;
+			break;
+		case LOG_LEVEL_WARNING:
+			_log_warning_stream = file;
+			break;
+		case LOG_LEVEL_INFO:
+			_log_info_stream = file;
+			break;
+		case LOG_LEVEL_DEBUG:
+			_log_debug_stream = file;
+			break;
 	}
 }
 
-void log_message(
-	const char* source,
-	log_level level,
-	void* data,
-	const char* message)
-{
-	log_listener* listener = _first_listener;
-	while (listener != NULL) {
-		if (listener->callback != NULL) {
-			if (level <= listener->level) {
-				listener->callback(source, level, data, message);
-			}
-		}
-		listener = listener->next;
-	}
+void log_set_stream_all(FILE* file) {
+	_log_initialize();
+	_log_error_stream = file;
+	_log_warning_stream = file;
+	_log_info_stream = file;
+	_log_debug_stream = file;
 }
 
-void log_messagef(
-	const char* source,
-	log_level type,
-	void* data,
-	const char* format,
-	...)
-{
-	char buffer[_max_message_buffer_size];
-	va_list args;
-
-	va_start(args, format);
-	vsnprintf(buffer, _max_message_buffer_size, format, args);
-	va_end(args);
-
-	log_message(source, type, data, buffer);
-}
-
-void _add_listener_to_list(log_listener* listener) {
-	log_listener* lastListener = _first_listener;
-
-	if (_first_listener == NULL) {
-		_first_listener = listener;
-		return;
-	}
-
-	while (lastListener->next != NULL) {
-		lastListener = lastListener->next;
-	}
-	lastListener->next = listener;
-}
-
-void _remove_listener_from_list(log_listener* listener) {
-	log_listener* currListener = _first_listener;
-	log_listener* prevListener = NULL;
-	log_listener* nextListener = NULL;
-
-	while (currListener != NULL) {
-		if (listener == currListener) {
-			nextListener = currListener->next;
-			if (prevListener != NULL) {
-				prevListener->next = nextListener;
-			}
-			else {
-				_first_listener = nextListener;
-			}
-			return;
-		}
-		prevListener = currListener;
-		currListener = currListener->next;
+void _log_initialize() {
+	if (_log_not_initialized) {
+		_log_error_stream = stderr;
+		_log_warning_stream = stderr;
+		_log_info_stream = stdout;
+		_log_debug_stream = NULL;
+		_log_not_initialized = 0;
 	}
 }
-
-log_listener* _find_listener(log_cb callback) {
-	log_listener* listener = _first_listener;
-	while (listener != NULL) {
-		if (listener->callback == callback) {
-			return listener;
-		}
-		listener = listener->next;
-	}
-	return NULL;
-}
-

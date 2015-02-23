@@ -8,6 +8,10 @@
 extern "C" {
 #endif
 
+	/** \addtogroup ring
+	 * @{
+	 */
+
 	typedef struct ring_s* ring_handle_t;
 
 	status_t ring_create(
@@ -25,6 +29,8 @@ extern "C" {
 		ring_handle_t handle, 
 		size_t index, 
 		void** pp_element);
+
+	/** @} */
 
 #ifdef __cplusplus
 }

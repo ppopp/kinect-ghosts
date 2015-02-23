@@ -2,40 +2,42 @@
 #define _median_filter_h_
 
 #include "common.h"
-
-/*
-   How is this going to go down?
-
-   Everything is in RAM.  The slow way to do this is to 
-   copy memory in for eacy pixel, sort it, then move onto next
-   pixel.  We could do it all at once, or we could do each dimension
-   separately in 3 passes.   
-
-   1st just do it in the time domain, see if it improves things.
-
-*/
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+	/** \addtogroup median_filter
+	 *  @{
+	 */
+	typedef struct median_filter_s* median_filter_handle_t;
 
-	typedef struct zmedian_s* zmedian_handle_t;
+	typedef struct median_filter_shape_s {
+		size_t x;
+		size_t y;
+		size_t z;
+	} median_filter_shape_t;
+
+	typedef struct median_filter_input_spec_s {
+		size_t element_size;
+		size_t channel_count;
+		size_t width;
+		size_t height;
+	} median_filter_input_spec_t;
+
 	
-	status_t zmedian_create(
-		size_t element_size, 
-		comparison_function compare
-		zmedian_handle_t* p_handle);
+	status_t median_filter_create(
+		median_filter_input_spec_t input_spec,
+		median_filter_shape_t filter_shape,
+		comparison_function compare,
+		median_filter_handle_t* p_handle);
 
-	void zmedian_release(zmedian_handle_t handle);
+	void median_filter_release(median_filter_handle_t handle);
 
-	status_t zmedian_append(
-		zmedian_handle_t handle,
-		void* data, 
-		size_t data_size);
+	status_t median_filter_append(median_filter_handle_t handle, void* data);
 
-	status_t zmedian_filter(
-		zmedian_handle_t handle,
-		size_t filter_len);
+	status_t median_filter_apply(median_filter_handle_t handle);
+	/** @} */
 
 #ifdef __cplusplus
 }

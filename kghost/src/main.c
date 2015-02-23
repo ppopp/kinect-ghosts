@@ -42,7 +42,6 @@ static const unsigned char _spacebar = (unsigned char)' ';
 static const freenect_resolution _ghosts_resolution = FREENECT_RESOLUTION_MEDIUM;
 static const double _min_camera_angle = -35.0;
 static const double _max_camera_angle = 35.0;
-static log_level _print_log_level = LogLevelDebug;
 
 /* collect 5 seconds of video */
 static const size_t _max_recorded_bytes = 640 * 480 * 4 * 30 * 5 * 4;
@@ -141,12 +140,6 @@ static void _freenect_log_callback(
 static void _video_cb(freenect_device *dev, void *video, uint32_t timestamp);
 static void _depth_cb(freenect_device *dev, void *depth, uint32_t timestamp);
 
-/* system logging callback */
-static void _log_cb(
-	const char* source, 
-	log_level level, 
-	void* data, 
-	const char* message);
 
 /* command callback */
 static int _command_set(const char* cmd, void* data);
@@ -161,6 +154,7 @@ static status_t _init_layer(
 	freerec_handle_t freerec, 
 	size_t freerec_clip_index, 
 	layer_t* p_layer);
+
 static status_t _layer_get_next_frame(
 		layer_t* p_layer,
 		double time_delta,
@@ -174,7 +168,7 @@ int main(int argc, const char* argv[]) {
 	void* userData = NULL;
 	int error = 0;
 
-	log_add_callback(_log_cb, LogLevelDebug);
+	log_set_stream_all(stdout);
 	glut_callbacks callbacks = {
 		&_init,
 		&_display,
@@ -193,7 +187,6 @@ int main(int argc, const char* argv[]) {
 	error = glut_main(argc, argv, "ghosts", &callbacks, userData);
 	LOG_DEBUG("ghosts", NULL, "end main loop");
 
-	log_remove_callback(_log_cb);
 	return 0;
 }
 
@@ -249,7 +242,7 @@ int _init(void* data) {
 	/* initialize kinect device and start callbacks */
 	error = _init_freenect(p_gl_ghosts, _ghosts_resolution);
 	if (error != 0) {
-		LOG_ERROR("ghosts", NULL, "failed to init freenect");
+		LOG_ERROR("failed to init freenect");
 		return error;
 	}
 
@@ -260,12 +253,12 @@ int _init(void* data) {
 		_max_recorded_bytes,
 		&(p_gl_ghosts->freerec));
 	if (0 != error) {
-		LOG_ERROR("ghosts", NULL, "failed to init freerec");
+		LOG_ERROR("failed to init freerec");
 		return error;
 	}
 	error = freerec_action(p_gl_ghosts->freerec);
 	if (0 != error) {
-		LOG_ERROR("ghosts", NULL, "failed to init freerec");
+		LOG_ERROR("failed to init freerec");
 		return error;
 	}
 
@@ -277,20 +270,20 @@ int _init(void* data) {
 
 	error = timer_create(&(p_gl_ghosts->record_timer));
 	if (0 != error) {
-		LOG_ERROR("ghosts", NULL, "failed to create record timer");
+		LOG_ERROR("failed to create record timer");
 		return error;
 	}
 
 	error = timer_create(&(p_gl_ghosts->playback_timer));
 	if (0 != error) {
-		LOG_ERROR("ghosts", NULL, "failed to create playback timer");
+		LOG_ERROR("failed to create playback timer");
 		return error;
 	}
 
 	/* initialize opengl shaders, buffers etc */
 	error = _init_opengl(p_gl_ghosts);
 	if (error != 0) {
-		LOG_ERROR("ghosts", NULL, "failed to init opengl");
+		LOG_ERROR("failed to init opengl");
 	}
 	return error;
 }
@@ -305,7 +298,7 @@ int _init_opengl(gl_ghosts* p_gl_ghosts) {
 	 * buffers offer fast streaming of data from the kinect to the graphics
 	 * card */
 	if (p_gl_ghosts == NULL) {
-		LOG_ERROR("ghosts", NULL, "null pointer");
+		LOG_ERROR("null pointer");
 		return -1;
 	}
 		
@@ -327,7 +320,7 @@ int _init_opengl(gl_ghosts* p_gl_ghosts) {
 		bits_per_pixel / 8,
 		GL_DYNAMIC_DRAW);
 	if (NULL == p_gl_ghosts->gl_live_video_buffer) {
-		LOG_ERROR("ghosts", NULL, "failed to create screen");
+		LOG_ERROR("failed to create screen");
 		return -1;
 	}
 	for (index = 0; index < TEXTURE_CAPACITY; index++) {
@@ -341,7 +334,7 @@ int _init_opengl(gl_ghosts* p_gl_ghosts) {
 			bits_per_pixel / 8,
 			GL_DYNAMIC_DRAW);
 		if (NULL == p_gl_ghosts->gl_video_buffers[index]) {
-			LOG_ERROR("ghosts", NULL, "failed to create screen");
+			LOG_ERROR("failed to create screen");
 			return -1;
 		}
 	}
@@ -360,7 +353,7 @@ int _init_opengl(gl_ghosts* p_gl_ghosts) {
 		bits_per_pixel / 8,
 		GL_DYNAMIC_DRAW);
 	if (NULL == p_gl_ghosts->gl_live_depth_buffer) {
-		LOG_ERROR("ghosts", NULL, "failed to create screen");
+		LOG_ERROR("failed to create screen");
 		return -1;
 	}
 	for (index = 0; index < TEXTURE_CAPACITY; index++) {
@@ -374,7 +367,7 @@ int _init_opengl(gl_ghosts* p_gl_ghosts) {
 			bits_per_pixel / 8,
 			GL_DYNAMIC_DRAW);
 		if (NULL == p_gl_ghosts->gl_depth_buffers[index]) {
-			LOG_ERROR("ghosts", NULL, "failed to create screen");
+			LOG_ERROR("failed to create screen");
 			return -1;
 		}
 	}
@@ -383,7 +376,7 @@ int _init_opengl(gl_ghosts* p_gl_ghosts) {
 	 * pixel buffers are drawn */
 	p_gl_ghosts->canvas = gl_canvas_create();
 	if (NULL == p_gl_ghosts->canvas) {
-		LOG_ERROR("ghosts", NULL, "failed to create canvas");
+		LOG_ERROR("failed to create canvas");
 		return -1;
 	}
 	
@@ -393,21 +386,21 @@ int _init_opengl(gl_ghosts* p_gl_ghosts) {
 		GL_VERTEX_SHADER,
 		p_gl_ghosts->vertex_shader_path);
 	if (p_gl_ghosts->vertex_shader == 0) {
-		LOG_ERROR("ghosts", NULL, "failed to load vertex shader");
+		LOG_ERROR("failed to load vertex shader");
 		return -1;
 	}
 	p_gl_ghosts->fragment_shader = gl_shader_load(
 		GL_FRAGMENT_SHADER,
 		p_gl_ghosts->fragment_shader_path);
 	if (p_gl_ghosts->fragment_shader == 0) {
-		LOG_ERROR("ghosts", NULL, "failed to load fragment shader");
+		LOG_ERROR("failed to load fragment shader");
 		return -1;
 	}
 	p_gl_ghosts->shader_program = gl_shader_program(
 		p_gl_ghosts->vertex_shader,
 		p_gl_ghosts->fragment_shader);
 	if (p_gl_ghosts->shader_program == 0) {
-		LOG_ERROR("ghosts", NULL, "failed to link shader program");
+		LOG_ERROR("failed to link shader program");
 		return -1;
 	}
 
@@ -430,8 +423,6 @@ int _init_opengl(gl_ghosts* p_gl_ghosts) {
 		(p_gl_ghosts->attributes.position < 0)) 
 	{
 		LOG_ERROR(
-			"ghosts", 
-			NULL, 
 			"failed to get uniform/attribute locations from shaders");
 		return -1;
 	}	
@@ -439,28 +430,19 @@ int _init_opengl(gl_ghosts* p_gl_ghosts) {
 	/* get array of video textures, depth textures and depth cutoffs */
 	for (index = 0; index < TEXTURE_CAPACITY; index++) {
 		if (sprintf(uniform_string, "video_texture_%02i", (int)index) < 0) {
-			LOG_ERROR(
-				"ghosts", 
-				NULL, 
-				"failed to create string for uniform");
+			LOG_ERROR("failed to create string for uniform");
 			return -1;
 		}
 		p_gl_ghosts->uniforms.video_textures[index]
 			= glGetUniformLocation(p_gl_ghosts->shader_program, uniform_string);
 		if (sprintf(uniform_string, "depth_texture_%02i", (int)index) < 0) {
-			LOG_ERROR(
-				"ghosts", 
-				NULL, 
-				"failed to create string for uniform");
+			LOG_ERROR("failed to create string for uniform");
 			return -1;
 		}
 		p_gl_ghosts->uniforms.depth_textures[index]
 			= glGetUniformLocation(p_gl_ghosts->shader_program, uniform_string);
 		if (sprintf(uniform_string, "depth_cutoff_%02i", (int)index) < 0) {
-			LOG_ERROR(
-				"ghosts", 
-				NULL, 
-				"failed to create string for uniform");
+			LOG_ERROR("failed to create string for uniform");
 			return -1;
 		}
 		p_gl_ghosts->uniforms.depth_cutoffs[index]
@@ -469,10 +451,7 @@ int _init_opengl(gl_ghosts* p_gl_ghosts) {
 			(p_gl_ghosts->uniforms.depth_textures[index] < 0) ||
 			(p_gl_ghosts->uniforms.depth_cutoffs[index] < 0))
 		{
-			LOG_ERROR(
-				"ghosts", 
-				NULL, 
-				"failed to get uniform/attribute locations from shaders");
+			LOG_ERROR("failed to get uniform/attribute locations from shaders");
 			return -1;
 		}	
 	}
@@ -487,7 +466,7 @@ int _init_freenect(gl_ghosts* p_gl_ghosts, freenect_resolution resolution) {
 	int bit_count = 0;
 
 	if (p_gl_ghosts == NULL) {
-		LOG_ERROR("ghosts", NULL, "null pointer");
+		LOG_ERROR("null pointer");
 		return -1;
 	}
 
@@ -497,7 +476,7 @@ int _init_freenect(gl_ghosts* p_gl_ghosts, freenect_resolution resolution) {
 
 	num_devices = freenect_num_devices(p_gl_ghosts->fnctx);
 	if (num_devices < 1) {
-		LOG_WARNING("ghosts", NULL, "no kinect devices found");
+		LOG_WARNING("no kinect devices found");
 		return -1;
 	}
 	/* assume only one device is connected.  open the first device */
@@ -506,7 +485,7 @@ int _init_freenect(gl_ghosts* p_gl_ghosts, freenect_resolution resolution) {
 		&(p_gl_ghosts->fndevice), 
 		0);
 	if (error) {
-		LOG_ERROR("ghosts", NULL, "failed to connect to freenect device");
+		LOG_ERROR("failed to connect to freenect device");
 		return error;
 	}
 
@@ -519,24 +498,24 @@ int _init_freenect(gl_ghosts* p_gl_ghosts, freenect_resolution resolution) {
 		resolution, 
 		FREENECT_VIDEO_RGB);
 	if (!(p_gl_ghosts->video_mode.is_valid)) {
-		LOG_ERROR("ghosts", NULL, "invalid video mode");
+		LOG_ERROR("invalid video mode");
 		return -1;
 	}
 	error = freenect_set_video_mode(p_gl_ghosts->fndevice, p_gl_ghosts->video_mode);
 	if (error < 0) {
-		LOG_ERROR("ghosts", NULL, "failed to set video mode");
+		LOG_ERROR("failed to set video mode");
 		return error;
 	}
 	p_gl_ghosts->video_buffer = malloc(p_gl_ghosts->video_mode.bytes);
 	if (p_gl_ghosts->video_buffer == NULL) {
-		LOG_ERROR("ghosts", NULL, "failed to allocate video buffer");
+		LOG_ERROR("failed to allocate video buffer");
 		return -1;
 	}
 	error = freenect_set_video_buffer(
 		p_gl_ghosts->fndevice, 
 		p_gl_ghosts->video_buffer);
 	if (error < 0) {
-		LOG_ERROR("ghosts", NULL, "failed to set video buffer");
+		LOG_ERROR("failed to set video buffer");
 		return error;
 	}
 	freenect_set_video_callback(p_gl_ghosts->fndevice, _video_cb);
@@ -551,24 +530,24 @@ int _init_freenect(gl_ghosts* p_gl_ghosts, freenect_resolution resolution) {
 		resolution, 
 		FREENECT_DEPTH_REGISTERED);
 	if (!(p_gl_ghosts->depth_mode.is_valid)) {
-		LOG_ERROR("ghosts", NULL, "invalid depth mode");
+		LOG_ERROR("invalid depth mode");
 		return -1;
 	}
 	error = freenect_set_depth_mode(p_gl_ghosts->fndevice, p_gl_ghosts->depth_mode);
 	if (error < 0) {
-		LOG_ERROR("ghosts", NULL, "failed to set depth mode");
+		LOG_ERROR("failed to set depth mode");
 		return error;
 	}
 	p_gl_ghosts->depth_buffer = malloc(p_gl_ghosts->depth_mode.bytes);
 	if (p_gl_ghosts->depth_buffer == NULL) {
-		LOG_ERROR("ghosts", NULL, "failed to allocate depth buffer");
+		LOG_ERROR("failed to allocate depth buffer");
 		return -1;
 	}
 	error = freenect_set_depth_buffer(
 		p_gl_ghosts->fndevice, 
 		p_gl_ghosts->depth_buffer);
 	if (error < 0) {
-		LOG_ERROR("ghosts", NULL, "failed to set depth buffer");
+		LOG_ERROR("failed to set depth buffer");
 		return error;
 	}
 	freenect_set_depth_callback(p_gl_ghosts->fndevice, _depth_cb);
@@ -581,12 +560,12 @@ int _init_freenect(gl_ghosts* p_gl_ghosts, freenect_resolution resolution) {
 	/* start collecting from device */
 	error = freenect_start_video(p_gl_ghosts->fndevice);
 	if (error < 0) {
-		LOG_ERROR("ghosts", NULL, "failed to start video");
+		LOG_ERROR("failed to start video");
 		return error;
 	}
 	error = freenect_start_depth(p_gl_ghosts->fndevice);
 	if (error < 0) {
-		LOG_ERROR("ghosts", NULL, "failed to start depth");
+		LOG_ERROR("failed to start depth");
 	}
 
 	return error;
@@ -607,25 +586,25 @@ void _display(void* data) {
 		return;
 	}
 	if (p_gl_ghosts == NULL) {
-		LOG_ERROR("ghosts", NULL, "null pointer");
+		LOG_ERROR("null pointer");
 		return;
 	}
 
 	/* get time since last callback */
 	error = timer_current(p_gl_ghosts->playback_timer, &delta);
 	if (0 != error) {
-		LOG_ERROR("ghosts", NULL, "error getting playback time");
+		LOG_ERROR("error getting playback time");
 		return; 
 	}
 	error = timer_reset(p_gl_ghosts->playback_timer);
 	if (0 != error) {
-		LOG_ERROR("ghosts", NULL, "error reseting playback time");
+		LOG_ERROR("error reseting playback time");
 		return; 
 	}
 
 	error = freerec_clip_count(p_gl_ghosts->freerec, &num_clips);
 	if (0 != error) {
-		LOG_ERROR("ghosts", NULL, "error getting clip count");
+		LOG_ERROR("error getting clip count");
 		return; 
 	}
 
@@ -645,12 +624,12 @@ void _display(void* data) {
 		/* get video and depth information from freerec */
 		error = freerec_clip_frame_count(p_gl_ghosts->freerec, index, &num_frames);
 		if (0 != error) {
-			LOG_ERROR("ghosts", NULL, "error getting frame count");
+			LOG_ERROR("error getting frame count");
 			num_frames = 0;
 		}
 
 		if (0 == num_frames) {
-			LOG_WARNING("ghosts", NULL, "clip with zero frames");
+			LOG_WARNING("clip with zero frames");
 		}
 
 		if (num_frames > 0) {
@@ -664,7 +643,7 @@ void _display(void* data) {
 				&video_buffer,
 				&depth_buffer);
 			if (0 != error) {
-				LOG_ERROR("ghosts", NULL, "error getting frame");
+				LOG_ERROR("error getting frame");
 				num_frames = 0;
 			}
 
@@ -740,7 +719,7 @@ void _idle(void* data) {
 
 	gl_ghosts* p_gl_ghosts = (gl_ghosts*)data;
 	if (p_gl_ghosts == NULL) {
-		LOG_WARNING("ghosts", NULL, "null pointer");
+		LOG_WARNING("null pointer");
 		return;
 	}
 	/* this forces the video and depth callbacks to happen */
@@ -752,14 +731,14 @@ void _idle(void* data) {
 		glutPostRedisplay();
 	}
 	else {
-		LOG_WARNING("ghosts", NULL, "error while process freenect events");
+		LOG_WARNING("error while process freenect events");
 	}
 }
 
 void _keyboard(unsigned char key, int mouseX, int mouseY, void* data) {
 	gl_ghosts* p_gl_ghosts = (gl_ghosts*)data;
 	if (p_gl_ghosts == NULL) {
-		LOG_WARNING("ghosts", NULL, "null pointer");
+		LOG_WARNING("null pointer");
 		return;
 	}
 	putc(key, stdout);
@@ -776,24 +755,14 @@ void _keyboard(unsigned char key, int mouseX, int mouseY, void* data) {
 			p_gl_ghosts->command, 
 			p_gl_ghosts);
 		if (cmdResult == COMMAND_CONTINUE) {
-			log_messagef(
-				"ghosts", 
-				LogLevelWarning, 
-				NULL,
-				"unhandled command: %s @%s:%u",
-				p_gl_ghosts->command, 
-				__FILE__, 
-				__LINE__);
+			LOG_WARNING(
+				"unhandled command \"%s\"",
+				p_gl_ghosts->command);
 		}
 		else if (cmdResult == COMMAND_ERROR) {
-			log_messagef(
-				"ghosts", 
-				LogLevelError, 
-				NULL,
-				"error handling command: %s @%s:%u",
-				p_gl_ghosts->command, 
-				__FILE__, 
-				__LINE__);
+			LOG_ERROR(
+				"error handling command \"%s\"",
+				p_gl_ghosts->command);
 		}
 
 		p_gl_ghosts->commandPos = 0;
@@ -802,11 +771,11 @@ void _keyboard(unsigned char key, int mouseX, int mouseY, void* data) {
 	else if ((key == _spacebar) && (p_gl_ghosts->commandPos == 0)) {
 		if (p_gl_ghosts->do_record) {
 			_stop_recording(p_gl_ghosts);
-			LOG_INFO("ghosts", NULL, "stopping recording");
+			LOG_INFO("stopping recording");
 		}
 		else {
 			_start_recording(p_gl_ghosts);
-			LOG_INFO("ghosts", NULL, "starting recording");
+			LOG_INFO("starting recording");
 		}
 	}
 	else {
@@ -816,7 +785,7 @@ void _keyboard(unsigned char key, int mouseX, int mouseY, void* data) {
 			p_gl_ghosts->commandPos = 0;
 			memset(p_gl_ghosts->command, 0, MAX_COMMAND_LENGTH);
 			fprintf(stdout, "\n");
-			LOG_WARNING("ghosts", NULL, "command exceeds maximum command length");
+			LOG_WARNING("command exceeds maximum command length");
 		}
 	}
 }
@@ -829,7 +798,7 @@ void _special(
 {
 	gl_ghosts* p_gl_ghosts = (gl_ghosts*)data;
 	if (p_gl_ghosts == NULL) {
-		LOG_WARNING("ghosts", NULL, "null pointer");
+		LOG_WARNING("null pointer");
 		return;
 	}
 
@@ -848,7 +817,7 @@ void _special(
 					p_gl_ghosts->fndevice, 
 					p_gl_ghosts->cameraAngle) != 0)
 			{
-				LOG_WARNING("ghosts", NULL, "error when titlting kinect");
+				LOG_WARNING("error when titlting kinect");
 			}
 			break;
 		case GLUT_KEY_LEFT:
@@ -868,23 +837,23 @@ void _freenect_log_callback(
 	switch (level) {
 		case FREENECT_LOG_FATAL:
 		case FREENECT_LOG_ERROR:
-			LOG_ERROR("freenect", dev, msg);
+			LOG_ERROR("freenect error - %s", msg);
 			break;
 		case FREENECT_LOG_WARNING:
 		case FREENECT_LOG_NOTICE:
-			LOG_WARNING("freenect", dev, msg);
+			LOG_WARNING("freenect warning - %s", msg);
 			break;
 		case FREENECT_LOG_INFO:
-			LOG_INFO("freenect", dev, msg);
+			LOG_INFO("freenect info - %s", msg);
 			break;
 		case FREENECT_LOG_DEBUG:
 		case FREENECT_LOG_SPEW:
 		case FREENECT_LOG_FLOOD:
-			LOG_DEBUG("freenect", dev, msg);
+			LOG_DEBUG("freenect debug - %s", msg);
 			break;
 		default:
-			LOG_ERROR("freenect", dev, msg);
-			LOG_WARNING("ghosts", NULL, "unhandled freenect log level");
+			LOG_ERROR("freenect error - %s", msg);
+			LOG_WARNING("unhandled freenect log level");
 	}
 }
 
@@ -894,7 +863,7 @@ void _video_cb(freenect_device *dev, void *video, uint32_t timestamp) {
 	
 	p_ghosts = (gl_ghosts*)freenect_get_user(dev);
 	if (NULL == p_ghosts) {
-		LOG_ERROR("ghosts", NULL, "null pointer");
+		LOG_ERROR("null pointer");
 		return;
 	}
 
@@ -903,7 +872,7 @@ void _video_cb(freenect_device *dev, void *video, uint32_t timestamp) {
 			p_ghosts->record_timer, 
 			&(p_ghosts->record_timestamp));
 		if (0 != error) {
-			LOG_ERROR("ghosts", NULL, "error getting record timestamp");
+			LOG_ERROR("error getting record timestamp");
 			return;
 		}
 		error = freerec_capture_video(
@@ -911,7 +880,7 @@ void _video_cb(freenect_device *dev, void *video, uint32_t timestamp) {
 			video, 
 			p_ghosts->record_timestamp);
 		if (0 != error) {
-			LOG_ERROR("ghosts", NULL, "error capturing video frame");
+			LOG_ERROR("error capturing video frame");
 			return;
 		}
 	}
@@ -923,7 +892,7 @@ void _depth_cb(freenect_device *dev, void *depth, uint32_t timestamp) {
 	
 	p_ghosts = (gl_ghosts*)freenect_get_user(dev);
 	if (NULL == p_ghosts) {
-		LOG_ERROR("ghosts", NULL, "null pointer");
+		LOG_ERROR("null pointer");
 		return;
 	}
 
@@ -933,7 +902,7 @@ void _depth_cb(freenect_device *dev, void *depth, uint32_t timestamp) {
 			depth, 
 			p_ghosts->record_timestamp);
 		if (0 != error) {
-			LOG_ERROR("ghosts", NULL, "error capturing depth frame");
+			LOG_ERROR("error capturing depth frame");
 			return;
 		}
 	}
@@ -961,26 +930,6 @@ void _cleanup(void* data) {
 	/* TODO: lots of other cleanup */
 }
 
-void _log_cb(
-	const char* source, 
-	log_level level, 
-	void* data, 
-	const char* message)
-{
-	FILE* out = stderr;
-	if (level >= LogLevelInfo) {
-		out = stdout;
-	}
-
-	if (level <= _print_log_level) {
-		fprintf(
-			out, 
-			"[%s][%s] %s\n",
-			source,
-			log_level_str(level),
-			message);
-	}
-}
 
 int _command_set(const char* cmd, void* data) {
 	const char *value = NULL;
@@ -1000,26 +949,6 @@ int _command_set(const char* cmd, void* data) {
 		return COMMAND_HANDLE_CONTINUE;
 	}
 
-	value = command_find_target(cmd, "log", '=', &isspace);
-	if (value) {
-		static const log_level logLevels[] = {
-			LogLevelError, 
-			LogLevelWarning, 
-			LogLevelInfo, 
-			LogLevelDebug
-		};
-		static const size_t numLogLevels = 
-			sizeof(logLevels) / sizeof(log_level);
-		size_t i = 0;
-		for (i = 0; i < numLogLevels; i++) {
-			if (strcmp(value, log_level_str(logLevels[i])) == 0) {
-				_print_log_level = logLevels[i];
-				return COMMAND_HANDLE_CONTINUE;
-			}
-		}
-		return COMMAND_ERROR;
-	}
-
 
 	return COMMAND_CONTINUE;
 }
@@ -1030,24 +959,24 @@ int _start_recording(gl_ghosts* p_gl_ghosts) {
 	size_t   num_clips = 0;
 
 	if(TRUE == p_gl_ghosts->do_record) {
-		LOG_DEBUG("ghosts", NULL, "attempt to start recording when already recording");
+		LOG_DEBUG("attempt to start recording when already recording");
 	}
 
 	/* check to make sure we can handle a new clip */
 	status = freerec_clip_count(p_gl_ghosts->freerec, &num_clips);
 	if (NO_ERROR != status) {
-		LOG_ERROR("ghosts", NULL, "failed to get clip count");
+		LOG_ERROR("failed to get clip count");
 		return status;
 	}
 
 	if (num_clips >= TEXTURE_CAPACITY) {
-		LOG_WARNING("ghosts", NULL, "cannot create any more clips");
+		LOG_WARNING("cannot create any more clips");
 		return NO_ERROR;
 	}
 
 	status = timer_reset(p_gl_ghosts->record_timer);
 	if (NO_ERROR != status) {
-		LOG_ERROR("ghosts", NULL, "failed to reset record timer");
+		LOG_ERROR("failed to reset record timer");
 		return status;
 	}
 
@@ -1063,7 +992,7 @@ int _stop_recording(gl_ghosts* p_gl_ghosts) {
 
 	/* check that we were recording in the first place */
 	if (FALSE == p_gl_ghosts->do_record) {
-		LOG_DEBUG("ghosts", NULL, "attemp to stop recording when not recording");
+		LOG_DEBUG("attemp to stop recording when not recording");
 		return NO_ERROR;
 	}
 
@@ -1073,18 +1002,18 @@ int _stop_recording(gl_ghosts* p_gl_ghosts) {
 	/* start new clip */
 	status = freerec_action(p_gl_ghosts->freerec);
 	if (NO_ERROR != status) {
-		LOG_ERROR("ghosts", NULL, "failed to start new clip");
+		LOG_ERROR("failed to start new clip");
 		return status;
 	}
 
 	/* initialize new layer for display */
 	status = freerec_clip_count(p_gl_ghosts->freerec, &count);
 	if (NO_ERROR != status) {
-		LOG_ERROR("ghosts", NULL, "failed to get clip count");
+		LOG_ERROR("failed to get clip count");
 		return status;
 	}
 	if (count >= TEXTURE_CAPACITY) {
-		LOG_WARNING("ghosts", NULL, "cannot create any more clips");
+		LOG_WARNING("cannot create any more clips");
 		return NO_ERROR;
 	}
 
@@ -1095,7 +1024,7 @@ int _stop_recording(gl_ghosts* p_gl_ghosts) {
 		last_clip,
 		&(p_gl_ghosts->layers[last_clip]));
 	if (NO_ERROR != status) {
-		LOG_ERROR("ghosts", NULL, "failed to init layer");
+		LOG_ERROR("failed to init layer");
 		return status;
 	}
 
@@ -1122,7 +1051,7 @@ status_t _init_layer(
 		&(p_layer->time));
 
 	if (NO_ERROR != status) {
-		LOG_ERROR("ghosts", NULL, "failed to get first timestamp");
+		LOG_ERROR("failed to get first timestamp");
 		return status;
 	}
 	/* get next timestamp */
@@ -1134,7 +1063,7 @@ status_t _init_layer(
 		&(p_layer->next_time));
 
 	if (NO_ERROR != status) {
-		LOG_ERROR("ghosts", NULL, "failed to get next timestamp");
+		LOG_ERROR("failed to get next timestamp");
 		return status;
 	}
 
@@ -1162,7 +1091,7 @@ status_t _layer_get_next_frame(
 		p_layer->frame += 1;
 		error = freerec_clip_frame_count(freerec, freerec_clip_index, &count);
 		if (0 != error) {
-			LOG_ERROR("ghosts", NULL, "error getting frames");
+			LOG_ERROR("error getting frames");
 			return error;
 		}
 		/* check for rollover of clip and loop if necessary */
@@ -1175,7 +1104,7 @@ status_t _layer_get_next_frame(
 				&dummy,
 				&(p_layer->time));
 			if (0 != error) {
-				LOG_ERROR("ghosts", NULL, "error getting frames");
+				LOG_ERROR("error getting frames");
 				return error;
 			}
 		}
@@ -1191,7 +1120,7 @@ status_t _layer_get_next_frame(
 			&dummy,
 			&(p_layer->next_time));
 		if (0 != error) {
-			LOG_ERROR("ghosts", NULL, "error getting frames");
+			LOG_ERROR("error getting frames");
 			return error;
 		}
 	}
@@ -1203,7 +1132,7 @@ status_t _layer_get_next_frame(
 		p_video_buffer,
 		&timestamp);
 	if (0 != error) {
-		LOG_ERROR("ghosts", NULL, "error getting frames");
+		LOG_ERROR("error getting frames");
 		return error;
 	}
 	error = freerec_clip_depth_frame(
@@ -1213,7 +1142,7 @@ status_t _layer_get_next_frame(
 		p_depth_buffer,
 		&timestamp);
 	if (0 != error) {
-		LOG_ERROR("ghosts", NULL, "error getting frames");
+		LOG_ERROR("error getting frames");
 		return error;
 	}
 

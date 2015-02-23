@@ -8,6 +8,10 @@
 extern "C" {
 #endif
 
+	/** \addtogroup vector
+	 * @{
+	 */
+
 	typedef struct vector_s* vector_handle_t;
 
 	status_t vector_create(
@@ -30,6 +34,8 @@ extern "C" {
 	status_t vector_array(
 		vector_handle_t handle, 
 		void** pp_first_element);
+
+	/** @} */
 
 #ifdef __cplusplus
 }

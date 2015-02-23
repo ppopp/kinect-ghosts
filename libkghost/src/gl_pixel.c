@@ -22,7 +22,7 @@ const gl_pixel_config* gl_pixel_get_config(GLenum format) {
 			return &_pixel_configs[i];
 		}
 	}
-	LOG_WARNING("gl", NULL, "failed to find pixel config");
+	LOG_WARNING("failed to find pixel config");
 	return NULL;
 }
 
@@ -34,7 +34,7 @@ size_t gl_pixel_position(
 	const gl_pixel_config* config)
 {
 	if (NULL == config) {
-		LOG_WARNING("gl", NULL, "null pointer");
+		LOG_WARNING("null pointer");
 		return gl_pixel_npos;
 	}
 	return config->colorsPerPixel * (yPos * width + xPos);

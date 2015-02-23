@@ -7,6 +7,10 @@
 extern "C" {
 #endif
 
+	/** \addtogroup stack
+	 * @{
+	 */
+
 	typedef void* stack_value_t;
 	typedef struct stack_s* stack_handle_t;
 
@@ -18,6 +22,8 @@ extern "C" {
 	status_t stack_empty(stack_handle_t handle, int* flag);
 	status_t stack_full(stack_handle_t handle, int* flag);
 	status_t stack_count(stack_handle_t handle, size_t* count);
+
+	/** @} */
 
 #ifdef __cplusplus
 }
