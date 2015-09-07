@@ -55,7 +55,7 @@ LINK_DEBUG_32_LIBS := $(LINK_DEBUG_LIBS) $(IPP_LIBS_32)
 LINK_DEBUG_64_LIBS := $(LINK_DEBUG_LIBS) $(IPP_LIBS_64)
 
 # If you have code that uses other libraries you can add in their directories here
-LIB_DIRS := $(LIB_DIRS)
+LIB_DIRS := $(LIB_DIRS) /usr/local/lib
 LIB_DIRS_DEBUG := $(LIB_DIRS)
 LIB_DIRS_RELEASE := $(LIB_DIRS)
 LIB_DIRS_DEBUG_32 := $(LIB_DIRS_DEBUG) $(IPP_LIB32_DIR)

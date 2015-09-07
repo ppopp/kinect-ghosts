@@ -37,6 +37,8 @@ extern "C" {
 	status_t median_filter_append(median_filter_handle_t handle, void* data);
 
 	status_t median_filter_apply(median_filter_handle_t handle);
+
+	status_t median_filter_clear(median_filter_handle_t handle);
 	/** @} */
 
 #ifdef __cplusplus

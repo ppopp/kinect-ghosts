@@ -105,7 +105,7 @@ const texture_unit* gl_texture_claim() {
 			return (texture_unit*)&_texture_options[i];
 		}
 	}
-	LOG_WARNING("gl", NULL, "failed to claim texture");
+	LOG_WARNING("failed to claim texture");
 	return NULL;
 }
 
@@ -113,7 +113,7 @@ void gl_texture_release(const texture_unit* tunit) {
 	size_t i = 0;
 
 	if (tunit == NULL) {
-		LOG_WARNING("gl", NULL, "null texture unit released");
+		LOG_WARNING("null texture unit released");
 	}
 	
 	for (i = 0; i < _num_texture_options; i++) {
@@ -122,6 +122,6 @@ void gl_texture_release(const texture_unit* tunit) {
 			return;
 		}
 	}
-	LOG_DEBUG("gl", NULL, "released texture never claimed");
+	LOG_DEBUG("released texture never claimed");
 }
 

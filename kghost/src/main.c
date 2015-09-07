@@ -183,9 +183,9 @@ int main(int argc, const char* argv[]) {
 
 	userData = &glGhosts;
 	/* run main loop */
-	LOG_DEBUG("ghosts", NULL, "start main loop");
+	LOG_DEBUG("start main loop");
 	error = glut_main(argc, argv, "ghosts", &callbacks, userData);
-	LOG_DEBUG("ghosts", NULL, "end main loop");
+	LOG_DEBUG("end main loop");
 
 	return 0;
 }

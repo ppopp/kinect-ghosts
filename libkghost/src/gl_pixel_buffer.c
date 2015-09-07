@@ -43,7 +43,7 @@ gl_pixel_buffer gl_pixel_buffer_create(
 	_gl_pixel_buffer* pb = NULL;
 
 	if ((width < 1) || (height < 1)) {
-		LOG_WARNING("gl", NULL, "invalid pixel buffer width/height");
+		LOG_WARNING("invalid pixel buffer width/height");
 		return pb;
 	}
 
@@ -60,7 +60,7 @@ gl_pixel_buffer gl_pixel_buffer_create(
 	pb->textureUnit = gl_texture_claim();
 	if (pb->textureUnit == NULL) {
 		free(pb);
-		LOG_WARNING("gl", NULL, "failed to claim texture enum for gl_pixel_buffer");
+		LOG_WARNING("failed to claim texture enum for gl_pixel_buffer");
 		return NULL;
 	}
 
@@ -91,7 +91,7 @@ gl_pixel_buffer gl_pixel_buffer_create(
 int gl_pixel_buffer_set_data(gl_pixel_buffer pb, const void* data) {
 	void* glData = NULL;
 	if (NULL == data) {
-		LOG_WARNING("gl", NULL, "null pointer");
+		LOG_WARNING("null pointer");
 		return -1;
 	}
 
@@ -105,7 +105,7 @@ int gl_pixel_buffer_set_data(gl_pixel_buffer pb, const void* data) {
 
 	if (NULL == glData) {
 		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-		LOG_WARNING("gl", NULL, "failed to map buffer");
+		LOG_WARNING("failed to map buffer");
 		return -1;
 	}
 
@@ -113,7 +113,7 @@ int gl_pixel_buffer_set_data(gl_pixel_buffer pb, const void* data) {
 
 	if (glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER) != GL_TRUE) {
 		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-		LOG_WARNING("gl", NULL, "failed to unmap buffer");
+		LOG_WARNING("failed to unmap buffer");
 		return -1;
 	}
 	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);

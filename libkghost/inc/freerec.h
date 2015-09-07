@@ -13,10 +13,6 @@ extern "C" {
 	 */
 
 	typedef struct freerec_s* freerec_handle_t;
-	typedef double timestamp_t;
-	/*
-	typedef unsigned timestamp_t;
-	*/
 
 	status_t freerec_create(
 		freenect_frame_mode* p_video_mode,

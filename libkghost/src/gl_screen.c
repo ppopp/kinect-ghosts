@@ -52,7 +52,7 @@ gl_screen gl_screen_create(
 	_gl_screen* screen = NULL;
 
 	if ((width < 1) || (height < 1)) {
-		LOG_WARNING("gl", NULL, "invalid screen width/height");
+		LOG_WARNING("invalid screen width/height");
 		return screen;
 	}
 
@@ -67,7 +67,7 @@ gl_screen gl_screen_create(
 	screen->textureUnit = gl_texture_claim();
 	if (screen->textureUnit == NULL) {
 		free(screen);
-		LOG_WARNING("gl", NULL, "failed to claim texture enum for gl_screen");
+		LOG_WARNING("failed to claim texture enum for gl_screen");
 		return NULL;
 	}
 
@@ -107,7 +107,7 @@ gl_screen gl_screen_create(
 int gl_screen_set_data(gl_screen screen, const void* data) {
 	void* glData = NULL;
 	if (NULL == data) {
-		LOG_WARNING("gl", NULL, "null pointer");
+		LOG_WARNING("null pointer");
 		return -1;
 	}
 
@@ -122,7 +122,7 @@ int gl_screen_set_data(gl_screen screen, const void* data) {
 
 	if (NULL == glData) {
 		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-		LOG_WARNING("gl", NULL, "failed to map buffer");
+		LOG_WARNING("failed to map buffer");
 		return -1;
 	}
 
@@ -130,7 +130,7 @@ int gl_screen_set_data(gl_screen screen, const void* data) {
 
 	if (glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER) != GL_TRUE) {
 		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-		LOG_WARNING("gl", NULL, "failed to unmap buffer");
+		LOG_WARNING("failed to unmap buffer");
 		return -1;
 	}
 	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);

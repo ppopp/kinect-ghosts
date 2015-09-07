@@ -12,6 +12,7 @@ extern "C" {
 	 * @{
 	 */
 
+	
 	typedef struct ring_s* ring_handle_t;
 
 	status_t ring_create(
@@ -25,6 +26,7 @@ extern "C" {
 	/* pushes to front of ring so that new element is now at index 0 */
 	status_t ring_push(ring_handle_t handle, const void* p_element);
 	status_t ring_clear(ring_handle_t handle);
+	/* ring acts as LIFO */
 	status_t ring_element(
 		ring_handle_t handle, 
 		size_t index, 

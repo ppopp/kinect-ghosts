@@ -8,7 +8,38 @@
 #include <string.h>
 
 /* enough to hold 1 hour of frames at 30 frames per second */
-static const size_t _max_frames = 60 * 60 * 30;
+//static const size_t _max_frames = 60 * 60 * 30;
+
+/*
+static void print_matrix_int64(const char* data, size_t element_size, size_t rows, size_t columns, size_t channels) {
+	size_t row = 0;
+	size_t column = 0;
+    size_t channel = 0;
+	size_t element = 0;
+	size_t pos = 0;
+	size_t copy_offset = sizeof(size_t) - element_size;
+
+	if (element_size > sizeof(size_t)) {
+		printf("cannot print");
+		return;
+	}
+
+    for (channel = 0; channel < channels; channel++) {
+        pos = channel * element_size;
+        for (row = 0; row < rows; row++) {
+            for (column = 0; column < columns; column++) {
+                char* p_element = (char*)&element;
+                memcpy((void*)p_element, (const void*)&data[pos], element_size);
+                printf("%zu\t", element);
+                pos += element_size * channels;
+			
+            }
+            printf("\n");
+        }
+        printf("\n");
+    }
+}
+*/
 
 typedef struct median_filter_s {
 	median_filter_shape_t filter_shape;
@@ -74,7 +105,6 @@ status_t median_filter_create(
 		return ERR_FAILED_ALLOC;
 	}
 	memset(p_median_filter, 0, sizeof(median_filter_t));
-
 
 	/* initialize structure */
 	p_median_filter->filter_shape = filter_shape;
@@ -165,6 +195,7 @@ status_t median_filter_apply(median_filter_handle_t handle) {
 	size_t half_z_medfilt = 0;
 	size_t output_pixel_stride = 0;
 	void** frames = NULL;
+    char** data = NULL;
 	char* out = NULL;
 
 	if (NULL == handle) {
@@ -188,9 +219,12 @@ status_t median_filter_apply(median_filter_handle_t handle) {
 	half_z_medfilt = handle->filter_shape.z / 2;
 	start = half_z_medfilt;
 	end = frame_count - half_z_medfilt;
+    /*
 	output_pixel_stride = 
 		handle->input_spec.element_size * 
 		handle->input_spec.channel_count;
+     */
+    output_pixel_stride = handle->input_spec.element_size;
 
 	/* TODO: some weird pointer stuff going on.  should probably check
 	 * what is actually going on */
@@ -214,12 +248,22 @@ status_t median_filter_apply(median_filter_handle_t handle) {
 		}
 	}
 
-	push_pos = half_z_medfilt;
+	push_pos = half_z_medfilt + 1;
 	while (out_z < frame_count) {
-		status = vector_element(handle->frames, out_z, (void**)&out);
+		status = vector_element(handle->frames, out_z, (void**)&data);
+        out = *data;
 		if (NO_ERROR != status) {
 			return status;
 		}
+		/*
+		printf("input frame\n");
+		print_matrix_int64(
+		   *data,
+		   handle->input_spec.element_size,
+		   handle->input_spec.height,
+		   handle->input_spec.width,
+		   handle->input_spec.channel_count);
+		   */
 		/* TODO: assume row major memory layout */
 		for (out_y = 0; out_y < handle->input_spec.height; out_y++) {
 			for (out_x = 0; out_x < handle->input_spec.width; out_x++) {
@@ -227,6 +271,7 @@ status_t median_filter_apply(median_filter_handle_t handle) {
 					out_channel < handle->input_spec.channel_count; 
 					out_channel++) 
 				{
+                    
 					/* copy data into sort buffer */
 					status = _load_buffer(
 						handle->sort_buffer,
@@ -236,6 +281,8 @@ status_t median_filter_apply(median_filter_handle_t handle) {
 						out_x, 
 						out_y, 
 						out_channel);
+
+
 						
 					/* sort data in buffer */
 					qsort(
@@ -243,6 +290,17 @@ status_t median_filter_apply(median_filter_handle_t handle) {
 						handle->filter_size,
 						handle->input_spec.element_size,
 						handle->compare);
+                    
+					/*
+					printf("z: %u, y: %u, x: %u, c: %u\n", out_z, out_y, out_x, out_channel);
+                    print_matrix_int64(
+                                       handle->sort_buffer,
+                                       handle->input_spec.element_size,
+                                       1,
+                                       handle->filter_size,
+                                       1);
+									   */
+
 
 					/* copy data to output */
 					memcpy(
@@ -251,10 +309,20 @@ status_t median_filter_apply(median_filter_handle_t handle) {
 						handle->input_spec.element_size);
 
 					/* TODO: assume row major memory layout */
-					out += output_pixel_stride;
+                    out += output_pixel_stride;
+
 				}
 			}
 		}
+		/*
+		printf("new output\n");
+		print_matrix_int64(
+			*data, 
+			handle->input_spec.element_size, 
+			handle->input_spec.height,
+			handle->input_spec.width,
+			handle->input_spec.channel_count);
+			*/
 
 		status = ring_push(handle->ring, frames[push_pos]);
 		if (NO_ERROR != status) {
@@ -269,6 +337,22 @@ status_t median_filter_apply(median_filter_handle_t handle) {
 	}
 
 	return NO_ERROR;
+}
+
+status_t median_filter_clear(median_filter_handle_t handle) {
+	status_t status = NO_ERROR;
+
+	if (NULL == handle) {
+		LOG_ERROR("null handle");
+		return ERR_NULL_POINTER;
+	}
+
+	status = vector_clear(handle->frames);
+	if (NO_ERROR != status) {
+		return status;
+	}
+	status = ring_clear(handle->ring);
+	return status;
 }
 
 status_t _load_buffer(
@@ -304,7 +388,6 @@ status_t _load_buffer(
 		if (NO_ERROR != status) {
 			return status;
 		}
-
 		/* TODO: assuming data is row major */
 		for (k = 0; k < p_shape->y; k++) {
 			int row = y_start + k;
@@ -313,7 +396,7 @@ status_t _load_buffer(
 				 * use the first row repeatedly */
 				row = 0;
 			}
-			else if (row > p_input_spec->height) {
+			else if (row >= p_input_spec->height) {
 				/* if we're before the first row , 
 				 * use the first row repeatedly */
 				row = p_input_spec->height - 1;
@@ -321,7 +404,7 @@ status_t _load_buffer(
 			p_row = &data[row * row_size];
 
 			for (j = 0; j < p_shape->x; j++) {
-				int pos = x_start + j * input_pixel_stride;
+				int pos = (x_start + j) * input_pixel_stride + input_channel_offset;
 				if (pos < 0) {
 					/* if we're before the first column, 
 					 * copy first pixel repeatedly */

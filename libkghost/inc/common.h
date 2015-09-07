@@ -25,11 +25,19 @@
 #define ERR_INVALID_TIMESTAMP (-12)
 
 #define ERR_FAILED_TIMER (-13)
+#define ERR_DEVICE_ERROR (-14)
+
+
+
 
 
 typedef int status_t;
 typedef unsigned char byte_t;
 typedef unsigned char bool_t;
+typedef double timestamp_t;
+/*
+typedef unsigned timestamp_t;
+*/
 
 typedef int (*comparison_function)(const void*, const void*);
 

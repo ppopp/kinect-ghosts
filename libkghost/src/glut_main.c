@@ -41,7 +41,7 @@ int glut_main(
 	if (_callbacks.init) {
 		int initResult = _callbacks.init(_user_data);
 		if (initResult) {
-			LOG_WARNING("glut", NULL, "failed user init callback");
+			LOG_WARNING("failed user init callback");
 			return initResult;
 		}
 	}

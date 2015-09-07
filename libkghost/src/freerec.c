@@ -153,7 +153,7 @@ void freerec_release(freerec_handle_t handle) {
 status_t freerec_action(freerec_handle_t handle) {
 	status_t err = NO_ERROR;
 #if FREEREC_LOG_TRACE
-	LOG_DEBUG("freerec_action", NULL, "enter");
+	LOG_DEBUG("enter");
 #endif
 	if (NULL == handle) {
 		return ERR_NULL_POINTER;
@@ -175,7 +175,7 @@ status_t freerec_action(freerec_handle_t handle) {
 	}
 
 #if FREEREC_LOG_TRACE
-	LOG_DEBUG("freerec_action", NULL, "exit");
+	LOG_DEBUG("exit");
 #endif
 	return NO_ERROR;
 }
@@ -184,7 +184,7 @@ status_t freerec_clip_count(freerec_handle_t handle, size_t* p_count) {
 	status_t status = NO_ERROR;
 
 #if FREEREC_LOG_TRACE
-	LOG_DEBUG("freerec_clip_count", NULL, "enter");
+	LOG_DEBUG("enter");
 #endif
 	if (NULL == handle) {
 		return ERR_NULL_POINTER;
@@ -202,7 +202,7 @@ status_t freerec_clip_count(freerec_handle_t handle, size_t* p_count) {
 	}
 
 #if FREEREC_LOG_TRACE
-	LOG_DEBUG("freerec_clip_count", NULL, "exit");
+	LOG_DEBUG("exit");
 #endif
 	return NO_ERROR;
 }
@@ -215,7 +215,7 @@ status_t freerec_clip_frame_count(
 	status_t err = NO_ERROR;
 	clip_handle_t clip_handle = NULL;
 #if FREEREC_LOG_TRACE
-	LOG_DEBUG("freerec_clip_frame_count", NULL, "enter");
+	LOG_DEBUG("enter");
 #endif
 
 	if (NULL == p_count) {
@@ -233,7 +233,7 @@ status_t freerec_clip_frame_count(
 	}
 
 #if FREEREC_LOG_TRACE
-	LOG_DEBUG("freerec_clip_frame_count", NULL, "exit");
+	LOG_DEBUG("exit");
 #endif
 	return NO_ERROR;
 }
@@ -248,7 +248,7 @@ status_t freerec_clip_video_frame(
 	status_t err = NO_ERROR;
 	char* frame_data = NULL;
 #if FREEREC_LOG_TRACE
-	LOG_DEBUG("freerec_clip_video_frame", NULL, "enter");
+	LOG_DEBUG("enter");
 #endif
 
 	if ((NULL == handle) || (NULL == p_data) || (NULL == p_timestamp)) {
@@ -268,7 +268,7 @@ status_t freerec_clip_video_frame(
 	*p_timestamp = *((timestamp_t*)&(frame_data[handle->timestamp_offset]));
 
 #if FREEREC_LOG_TRACE
-	LOG_DEBUG("freerec_clip_video_frame", NULL, "enter");
+	LOG_DEBUG("enter");
 #endif
 	return NO_ERROR;
 }
@@ -283,7 +283,7 @@ status_t freerec_clip_depth_frame(
 	status_t err = NO_ERROR;
 	char* frame_data = NULL;
 #if FREEREC_LOG_TRACE
-	LOG_DEBUG("freerec_clip_depth_frame", NULL, "enter");
+	LOG_DEBUG("enter");
 #endif
 
 	if ((NULL == handle) || (NULL == p_data) || (NULL == p_timestamp)) {
@@ -303,7 +303,7 @@ status_t freerec_clip_depth_frame(
 	*p_timestamp = *((timestamp_t*)&(frame_data[handle->timestamp_offset]));
 
 #if FREEREC_LOG_TRACE
-	LOG_DEBUG("freerec_clip_depth_frame", NULL, "exit");
+	LOG_DEBUG("exit");
 #endif
 	return NO_ERROR;
 }
@@ -315,7 +315,7 @@ status_t freerec_capture_video(
 {
 	status_t status = NO_ERROR;
 #if FREEREC_LOG_TRACE
-	LOG_DEBUG("freerec_capture_video", NULL, "enter");
+	LOG_DEBUG("enter");
 #endif
 	if (NULL == handle) {
 		return ERR_NULL_POINTER;
@@ -331,7 +331,7 @@ status_t freerec_capture_video(
 		return status;
 	}
 #if FREEREC_LOG_TRACE
-	LOG_DEBUG("freerec_capture_video", NULL, "exit");
+	LOG_DEBUG("exit");
 #endif
 	return NO_ERROR;
 }
@@ -343,7 +343,7 @@ status_t freerec_capture_depth(
 {
 	status_t status = NO_ERROR;
 #if FREEREC_LOG_TRACE
-	LOG_DEBUG("freerec_capture_depth", NULL, "enter");
+	LOG_DEBUG("enter");
 #endif
 
 	if (NULL == handle) {
@@ -360,7 +360,7 @@ status_t freerec_capture_depth(
 	}
 
 #if FREEREC_LOG_TRACE
-	LOG_DEBUG("freerec_capture_depth", NULL, "exit");
+	LOG_DEBUG("exit");
 #endif
 	return NO_ERROR;
 }

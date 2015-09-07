@@ -28,26 +28,26 @@ GLuint gl_shader_load(GLenum type, const char* path) {
 //	glewInit();
 	pFile = fopen(path, "rb");
 	if (!pFile) {
-		LOG_ERROR("gl", NULL, "failed to open shader file");
+		LOG_ERROR("failed to open shader file");
 		return 0;
 	}
 
 	if (fseek(pFile, 0, SEEK_END)) {
-		LOG_ERROR("gl", NULL, "error seeking within shader file");
+		LOG_ERROR("error seeking within shader file");
 		fclose(pFile);
 		return 0;
 	}
 
 	length = ftell(pFile);
 	if (length < 1) {
-		LOG_ERROR("gl", NULL, "invalid shader file");
+		LOG_ERROR("invalid shader file");
 		fclose(pFile);
 		return 0;
 	}
 
 	source = (GLchar*)malloc(length);
 	if (!source) {
-		LOG_ERROR("gl", NULL, "malloc error");
+		LOG_ERROR("malloc error");
 		fclose(pFile);
 		return 0;
 	}
@@ -56,7 +56,7 @@ GLuint gl_shader_load(GLenum type, const char* path) {
 	readSize = fread(source, 1, length, pFile);
 	fclose(pFile);
 	if (readSize != (size_t)length) {
-		LOG_ERROR("gl", NULL, "error reading shader file");
+		LOG_ERROR("error reading shader file");
 		free(source);
 		return 0;
 	}
@@ -68,7 +68,7 @@ GLuint gl_shader_load(GLenum type, const char* path) {
 	glCompileShader(shader);
 	glGetShaderiv(shader, GL_COMPILE_STATUS, &shader_ok);
 	if (!shader_ok) {
-		LOG_ERROR("gl", NULL, "failed to compile shader");
+		LOG_ERROR("failed to compile shader");
 		//gl_shader_info_log(shader, glGetShaderiv, glGetShaderInfoLog);
 		glDeleteShader(shader);
 		return 0;
@@ -103,7 +103,7 @@ GLuint gl_shader_program(GLuint vertexShader, GLuint fragmentShader) {
 	glLinkProgram(program);
 	glGetProgramiv(program, GL_LINK_STATUS, &program_ok);
 	if (!program_ok) {
-		LOG_ERROR("gl", NULL, "failed to linke shader program");
+		LOG_ERROR("failed to linke shader program");
 		//gl_shader_info_log(program, glGetProgramiv, glGetProgramInfoLog);
 		glDeleteProgram(program);
 		return 0;

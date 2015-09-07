@@ -132,6 +132,10 @@ status_t ring_element(
 		return ERR_RANGE_ERROR;
 	}
 
+    /* TODO: i think indexing is wrong if we're at capacity, or something ...
+     * why isn't the count used to determine the position?, why is index=0
+     * not the same as position = 0?
+     */
 	position = ((index + 1) * handle->element_size + handle->head);
 	position %= handle->data_size;
 
