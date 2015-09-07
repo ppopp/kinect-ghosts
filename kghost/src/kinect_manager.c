@@ -74,11 +74,13 @@ status_t kinect_manager_create(
 
 
 	/* initialize innards of struct */
-	p_knctmgr->depth_scale = 0.0f;
+	p_knctmgr->depth_scale = 1.0f;
 	p_knctmgr->camera_angle = 0.0;
 	p_knctmgr->timeout.tv_sec = 0;
 	p_knctmgr->timeout.tv_usec = 1000;
 	p_knctmgr->user_data = user_data;
+	p_knctmgr->video_mode.is_valid = 0;
+	p_knctmgr->depth_mode.is_valid = 0;
 	if (NULL != p_callbacks) {
 		memcpy(
 			(void*)&p_knctmgr->callbacks, 
@@ -136,7 +138,7 @@ status_t kinect_manager_info(
 		return ERR_NULL_POINTER;
 	}
 
-	if (_streq(field, CMI_DEPTH_BPP_SIZE_T)) {
+	if (_streq(field, KMI_DEPTH_BPP_SIZE_T)) {
 		size_t* p_bpp = (size_t*)p_data;
 		if (data_size != sizeof(size_t)) {
 			return ERR_INVALID_ARGUMENT;
@@ -144,21 +146,35 @@ status_t kinect_manager_info(
 		*p_bpp = handle->depth_mode.data_bits_per_pixel 
 			+ handle->depth_mode.padding_bits_per_pixel;
 	}
-	else if (_streq(field, CMI_DEPTH_WIDTH_SIZE_T)) {
+	else if (_streq(field, KMI_DEPTH_WIDTH_SIZE_T)) {
 		size_t* p_width = (size_t*)p_data;
 		if (data_size != sizeof(size_t)) {
 			return ERR_INVALID_ARGUMENT;
 		}
 		*p_width = handle->depth_mode.width;
 	}
-	else if (_streq(field, CMI_DEPTH_HEIGHT_SIZE_T)) {
+	else if (_streq(field, KMI_DEPTH_HEIGHT_SIZE_T)) {
 		size_t* p_height = (size_t*)p_data;
 		if (data_size != sizeof(size_t)) {
 			return ERR_INVALID_ARGUMENT;
 		}
 		*p_height = handle->depth_mode.height;
 	}
-	else if (_streq(field, CMI_VIDEO_BPP_SIZE_T)) {
+	else if (_streq(field, KMI_DEPTH_BYTES_SIZE_T)) {
+		size_t* p_bytes = (size_t*)p_data;
+		if (data_size != sizeof(size_t)) {
+			return ERR_INVALID_ARGUMENT;
+		}
+		*p_bytes = handle->depth_mode.bytes;
+	}
+	else if (_streq(field, KMI_DEPTH_SCALE_FLOAT)) {
+		float* p_scale = (float*)p_data;
+		if (data_size != sizeof(float)) {
+			return ERR_INVALID_ARGUMENT;
+		}
+		*p_scale = handle->depth_scale;
+	}
+	else if (_streq(field, KMI_VIDEO_BPP_SIZE_T)) {
 		size_t* p_bpp = (size_t*)p_data;
 		if (data_size != sizeof(size_t)) {
 			return ERR_INVALID_ARGUMENT;
@@ -166,19 +182,26 @@ status_t kinect_manager_info(
 		*p_bpp = handle->video_mode.data_bits_per_pixel 
 			+ handle->video_mode.padding_bits_per_pixel;
 	}
-	else if (_streq(field, CMI_VIDEO_WIDTH_SIZE_T)) {
+	else if (_streq(field, KMI_VIDEO_WIDTH_SIZE_T)) {
 		size_t* p_width = (size_t*)p_data;
 		if (data_size != sizeof(size_t)) {
 			return ERR_INVALID_ARGUMENT;
 		}
 		*p_width = handle->video_mode.width;
 	}
-	else if (_streq(field, CMI_VIDEO_HEIGHT_SIZE_T)) {
+	else if (_streq(field, KMI_VIDEO_HEIGHT_SIZE_T)) {
 		size_t* p_height = (size_t*)p_data;
 		if (data_size != sizeof(size_t)) {
 			return ERR_INVALID_ARGUMENT;
 		}
 		*p_height = handle->video_mode.height;
+	}
+	else if (_streq(field, KMI_VIDEO_BYTES_SIZE_T)) {
+		size_t* p_bytes = (size_t*)p_data;
+		if (data_size != sizeof(size_t)) {
+			return ERR_INVALID_ARGUMENT;
+		}
+		*p_bytes = handle->video_mode.bytes;
 	}
 	else {
 		LOG_ERROR("invalid field \"%s\"", field);

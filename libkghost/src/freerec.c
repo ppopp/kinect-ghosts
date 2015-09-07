@@ -18,8 +18,8 @@ typedef struct clip_s {
 typedef struct clip_s* clip_handle_t;
 
 typedef struct freerec_s {
-	freenect_frame_mode video_mode;
-	freenect_frame_mode depth_mode;
+	size_t video_bytes;
+	size_t depth_bytes;
 	vector_handle_t clips;
 	size_t video_offset;
 	size_t depth_offset;
@@ -51,18 +51,15 @@ static status_t _freerec_new_frame(freerec_handle_t handle);
 static status_t _freerec_clear_current_frame(freerec_handle_t handle);
 
 status_t freerec_create(
-	freenect_frame_mode* p_video_mode,
-	freenect_frame_mode* p_depth_mode,
+	size_t video_bytes,
+	size_t depth_bytes,
 	size_t max_bytes,
 	freerec_handle_t* p_handle)
 {
 	status_t err = NO_ERROR;
 	freerec_t* p_freerec = NULL;
 
-	if ((NULL == p_handle) || 
-		(NULL == p_video_mode) || 
-		(NULL == p_depth_mode))
-	{
+	if (NULL == p_handle) {
 		return ERR_NULL_POINTER;
 	}
 
@@ -73,16 +70,13 @@ status_t freerec_create(
 
 	/* hopefuly you can just copy these over without some sort of copy
 	 * function to get dynamically allocated data */
-	p_freerec->video_mode = *p_video_mode;
-	p_freerec->depth_mode = *p_depth_mode;
+	p_freerec->video_bytes = video_bytes;
+	p_freerec->depth_bytes = depth_bytes;
 	p_freerec->clips = NULL;
 	p_freerec->video_offset = 0;
-	p_freerec->depth_offset = p_video_mode->bytes;
-	p_freerec->timestamp_offset = p_video_mode->bytes + p_depth_mode->bytes;
-	p_freerec->frame_size = 
-		p_video_mode->bytes + 
-		p_depth_mode->bytes + 
-		sizeof(timestamp_t);
+	p_freerec->depth_offset = video_bytes;
+	p_freerec->timestamp_offset = video_bytes + depth_bytes;
+	p_freerec->frame_size = video_bytes + depth_bytes + sizeof(timestamp_t);
 	p_freerec->current_frame = NULL;
 	p_freerec->memory_pool = NULL;
 	p_freerec->clip = NULL;
@@ -323,7 +317,7 @@ status_t freerec_capture_video(
 	status = _freerec_capture_data(
 		handle, 
 		handle->video_offset, 
-		handle->video_mode.bytes,
+		handle->video_bytes,
 		data, 
 		timestamp);
 
@@ -352,7 +346,7 @@ status_t freerec_capture_depth(
 	status = _freerec_capture_data(
 		handle, 
 		handle->depth_offset, 
-		handle->depth_mode.bytes,
+		handle->depth_bytes,
 		data, 
 		timestamp);
 	if (NO_ERROR != status) {

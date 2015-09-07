@@ -7,17 +7,23 @@
 #include <string.h>
 
 /* Depth bits per pixel */
-#define CMI_DEPTH_BPP_SIZE_T ("cmi_depth_bpp_size_t")
+#define KMI_DEPTH_BPP_SIZE_T ("kmi_depth_bpp_size_t")
 /* Depth width */
-#define CMI_DEPTH_WIDTH_SIZE_T ("cmi_depth_width_size_t")
+#define KMI_DEPTH_WIDTH_SIZE_T ("kmi_depth_width_size_t")
 /* Depth height */
-#define CMI_DEPTH_HEIGHT_SIZE_T ("cmi_depth_height_size_t")
+#define KMI_DEPTH_HEIGHT_SIZE_T ("kmi_depth_height_size_t")
+/* Depth bytes */
+#define KMI_DEPTH_BYTES_SIZE_T ("kmi_depth_bytes_size_t")
+/* Depth scale */
+#define KMI_DEPTH_SCALE_FLOAT ("kmi_depth_scale_float")
 /* Video bits per pixel */
-#define CMI_VIDEO_BPP_SIZE_T ("cmi_video_bpp_size_t")
+#define KMI_VIDEO_BPP_SIZE_T ("kmi_video_bpp_size_t")
 /* Video width */
-#define CMI_VIDEO_WIDTH_SIZE_T ("cmi_video_width_size_t")
+#define KMI_VIDEO_WIDTH_SIZE_T ("kmi_video_width_size_t")
 /* Video height */
-#define CMI_VIDEO_HEIGHT_SIZE_T ("cmi_video_height_size_t")
+#define KMI_VIDEO_HEIGHT_SIZE_T ("kmi_video_height_size_t")
+/* Video bytes */
+#define KMI_VIDEO_BYTES_SIZE_T ("kmi_video_bytes_size_t")
 
 #ifdef __cplusplus
 extern "C" {
@@ -37,7 +43,7 @@ extern "C" {
 		void (*video_frame_callback)(
 			kinect_manager_handle_t handle,
 			void* video_data, 
-			timestamp_t p_timestamp,
+			timestamp_t timestamp,
 			void* user_data);
 		void (*depth_ready_callback)(
 			kinect_manager_handle_t handle,
@@ -45,7 +51,7 @@ extern "C" {
 		void (*depth_frame_callback)(
 			kinect_manager_handle_t handle,
 			void* depth_data, 
-			timestamp_t p_timestamp,
+			timestamp_t timestamp,
 			void* user_data);
 	} kinect_callbacks_t;
 

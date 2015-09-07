@@ -15,8 +15,8 @@ extern "C" {
 	typedef struct freerec_s* freerec_handle_t;
 
 	status_t freerec_create(
-		freenect_frame_mode* p_video_mode,
-		freenect_frame_mode* p_depth_mode,
+		size_t video_bytes,
+		size_t depth_bytes,
 		size_t max_bytes,
 		freerec_handle_t* p_handle);
 
