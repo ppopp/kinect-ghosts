@@ -11,6 +11,7 @@
 #include "common.h"
 
 #include "kinect_manager.h"
+#include "display_manager.h"
 
 #include <GLUT/glut.h>
 
@@ -25,10 +26,6 @@
 /* Maximum string length of command entered through stdin */
 #define MAX_COMMAND_LENGTH (512)
 
-/* Maximum number of textures available in shader.  This *must* match or be
- * less than the size of the texture arrays in glsl/fragment.frag
- */
-#define TEXTURE_CAPACITY (7)
 
 #define DOWNSAMPLE (8)
 static int _downsample_counter = 0;
@@ -53,32 +50,7 @@ typedef struct _layer_s {
 typedef struct _gl_ghosts {
 	/* Shader variables */
 	const char* vertex_shader_path;
-	GLuint vertex_shader;
 	const char* fragment_shader_path;
-	GLuint fragment_shader;
-	GLuint shader_program;
-
-	gl_pixel_buffer gl_live_depth_buffer; 
-	gl_pixel_buffer gl_live_video_buffer; 
-	gl_pixel_buffer gl_video_buffers[TEXTURE_CAPACITY];
-	gl_pixel_buffer gl_depth_buffers[TEXTURE_CAPACITY];
-	gl_canvas canvas;
-
-	struct {
-		GLint live_video_texture;
-		GLint live_depth_texture;
-		GLint live_depth_cutoff;
-
-		GLint video_textures[TEXTURE_CAPACITY];
-		GLint depth_textures[TEXTURE_CAPACITY];
-		GLint depth_cutoffs[TEXTURE_CAPACITY];
-		GLint count;
-	} uniforms;
-
-	struct {
-		GLint position;
-	} attributes;
-
 
 	float depth_scale;
 	float depth_cutoff;
@@ -88,10 +60,11 @@ typedef struct _gl_ghosts {
 
 	freerec_handle_t freerec;
 	bool_t do_record;
-	layer_t layers[TEXTURE_CAPACITY];
+	layer_t layers[TEXTURE_CAPACITY - 1];
 	timer_handle_t playback_timer;
 
 	kinect_manager_handle_t kinect_manager;
+	display_manager_handle_t display_manager;
 	
 } gl_ghosts; 
 
@@ -116,7 +89,6 @@ static void _display(void* data);
 static int _init(void* data);
 static void _cleanup(void* data);
 
-static status_t _init_opengl(gl_ghosts* p_gl_ghosts);
 
 static void _video_cb(
 	kinect_manager_handle_t kinect_manager,
@@ -183,32 +155,17 @@ int _init(void* data) {
 	size_t     index       = 0;
 	size_t     video_bytes = 0;
 	size_t     depth_bytes = 0;
+	size_t     video_bits_per_pixel = 0;
+	size_t     video_width = 0;
+	size_t     video_height = 0;
+	size_t     depth_bits_per_pixel = 0;
+	size_t     depth_width = 0;
+	size_t     depth_height = 0;
 	gl_ghosts* p_gl_ghosts = (gl_ghosts*)data;
 
 	/* initialize gl_ghosts structure */
-	p_gl_ghosts->vertex_shader = 0;
-	p_gl_ghosts->fragment_shader = 0;
-	p_gl_ghosts->shader_program = 0;
-
-	p_gl_ghosts->canvas = NULL;
-	p_gl_ghosts->gl_live_depth_buffer = NULL;
-	p_gl_ghosts->gl_live_video_buffer = NULL;
-	for (index = 0; index < TEXTURE_CAPACITY; index++) {
-		p_gl_ghosts->gl_video_buffers[index] = NULL;
-		p_gl_ghosts->gl_depth_buffers[index] = NULL;
-		p_gl_ghosts->uniforms.video_textures[index] = 0;
-		p_gl_ghosts->uniforms.depth_textures[index] = 0;
-		p_gl_ghosts->uniforms.depth_cutoffs[index] = -1;
-	}
-	p_gl_ghosts->uniforms.count = 0;
-	p_gl_ghosts->uniforms.live_video_texture = 0;
-	p_gl_ghosts->uniforms.live_depth_texture = 0;
-	p_gl_ghosts->uniforms.live_depth_cutoff = -1;
-	p_gl_ghosts->attributes.position = 0;
 	p_gl_ghosts->depth_cutoff = 0.1;
 	p_gl_ghosts->depth_scale = 1.0f;
-
-
 
 	memset(p_gl_ghosts->command, 0, MAX_COMMAND_LENGTH);
 	p_gl_ghosts->commandPos = 0;
@@ -244,6 +201,7 @@ int _init(void* data) {
 		(void*)&p_gl_ghosts->depth_scale,
 		sizeof(p_gl_ghosts->depth_scale));
 	if (error != NO_ERROR) {
+		LOG_ERROR("failed getting info from kinect manager");
 		return error;
 	}
 	error = kinect_manager_info(
@@ -252,6 +210,7 @@ int _init(void* data) {
 		(void*)&video_bytes,
 		sizeof(video_bytes));
 	if (error != NO_ERROR) {
+		LOG_ERROR("failed getting info from kinect manager");
 		return error;
 	}
 	error = kinect_manager_info(
@@ -260,6 +219,61 @@ int _init(void* data) {
 		(void*)&depth_bytes,
 		sizeof(depth_bytes));
 	if (error != NO_ERROR) {
+		LOG_ERROR("failed getting info from kinect manager");
+		return error;
+	}
+	error = kinect_manager_info(
+		p_gl_ghosts->kinect_manager,
+		KMI_VIDEO_BPP_SIZE_T,
+		(void*)&video_bits_per_pixel,
+		sizeof(video_bits_per_pixel));
+	if (NO_ERROR != error) {
+		LOG_ERROR("failed getting info from kinect manager");
+		return error;
+	}
+	error = kinect_manager_info(
+		p_gl_ghosts->kinect_manager,
+		KMI_VIDEO_WIDTH_SIZE_T,
+		(void*)&video_width,
+		sizeof(video_width));
+	if (NO_ERROR != error) {
+		LOG_ERROR("failed getting info from kinect manager");
+		return error;
+	}
+	error = kinect_manager_info(
+		p_gl_ghosts->kinect_manager,
+		KMI_VIDEO_HEIGHT_SIZE_T,
+		(void*)&video_height,
+		sizeof(video_height));
+	if (NO_ERROR != error) {
+		LOG_ERROR("failed getting info from kinect manager");
+		return error;
+	}
+	error = kinect_manager_info(
+		p_gl_ghosts->kinect_manager,
+		KMI_DEPTH_BPP_SIZE_T,
+		(void*)&depth_bits_per_pixel,
+		sizeof(depth_bits_per_pixel));
+	if (NO_ERROR != error) {
+		LOG_ERROR("failed getting info from kinect manager");
+		return error;
+	}
+	error = kinect_manager_info(
+		p_gl_ghosts->kinect_manager,
+		KMI_DEPTH_WIDTH_SIZE_T,
+		(void*)&depth_width,
+		sizeof(depth_width));
+	if (NO_ERROR != error) {
+		LOG_ERROR("failed getting info from kinect manager");
+		return error;
+	}
+	error = kinect_manager_info(
+		p_gl_ghosts->kinect_manager,
+		KMI_DEPTH_HEIGHT_SIZE_T,
+		(void*)&depth_height,
+		sizeof(depth_height));
+	if (NO_ERROR != error) {
+		LOG_ERROR("failed getting info from kinect manager");
 		return error;
 	}
 
@@ -280,7 +294,7 @@ int _init(void* data) {
 		return error;
 	}
 
-	for (index = 0; index < TEXTURE_CAPACITY; index++) {
+	for (index = 0; index < (TEXTURE_CAPACITY - 1); index++) {
 		p_gl_ghosts->layers[index].depth = 0.0f;
 		p_gl_ghosts->layers[index].time = 0.0;
 		p_gl_ghosts->layers[index].frame = 0;
@@ -292,230 +306,23 @@ int _init(void* data) {
 		return error;
 	}
 
-	/* initialize opengl shaders, buffers etc */
-	error = _init_opengl(p_gl_ghosts);
+	/* initialize display manager */
+	error = display_manager_create(
+		p_gl_ghosts->vertex_shader_path,
+		p_gl_ghosts->fragment_shader_path,
+		video_bits_per_pixel,
+		video_width,
+		video_height,
+		depth_bits_per_pixel,
+		depth_width,
+		depth_height,
+		p_gl_ghosts->depth_scale,
+		&p_gl_ghosts->display_manager);
+
 	if (error != NO_ERROR) {
-		LOG_ERROR("failed to init opengl");
+		LOG_ERROR("failed to init dispaly manager");
 	}
 	return error;
-}
-
-status_t _init_opengl(gl_ghosts* p_gl_ghosts) {
-	status_t error               = NO_ERROR;
-	size_t   bits_per_pixel      = 0;
-	size_t   width               = 0;
-	size_t   height              = 0;
-	size_t   index               = 0;
-	char     uniform_string[256] = {'\0'};
-	/* Initialize opengl to have two pixel buffers, one for video data from
-	 * the kinect, and another for the depth data.  Data types / formats here
-	 * have to match those used when initializing the kinect.  The pixel 
-	 * buffers offer fast streaming of data from the kinect to the graphics
-	 * card */
-	if (p_gl_ghosts == NULL) {
-		LOG_ERROR("null pointer");
-		return -1;
-	}
-		
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_COLOR); 
-	glDisable(GL_DEPTH_TEST);
-
-	/* get width, height & bits per pixel info about video stream */
-	error = kinect_manager_info(
-		p_gl_ghosts->kinect_manager,
-		KMI_VIDEO_BPP_SIZE_T,
-		(void*)&bits_per_pixel,
-		sizeof(bits_per_pixel));
-	if (NO_ERROR != error) {
-		return error;
-	}
-	error = kinect_manager_info(
-		p_gl_ghosts->kinect_manager,
-		KMI_VIDEO_WIDTH_SIZE_T,
-		(void*)&width,
-		sizeof(width));
-	if (NO_ERROR != error) {
-		return error;
-	}
-	error = kinect_manager_info(
-		p_gl_ghosts->kinect_manager,
-		KMI_VIDEO_HEIGHT_SIZE_T,
-		(void*)&height,
-		sizeof(height));
-	if (NO_ERROR != error) {
-		return error;
-	}
-
-	/* create video pixel streaming buffer */
-	p_gl_ghosts->gl_live_video_buffer = gl_pixel_buffer_create(
-		width,
-		height,
-		GL_TEXTURE_2D,
-		GL_RGBA, 
-		GL_RGB,
-		GL_UNSIGNED_BYTE,
-		bits_per_pixel / 8,
-		GL_DYNAMIC_DRAW);
-	if (NULL == p_gl_ghosts->gl_live_video_buffer) {
-		LOG_ERROR("failed to create screen");
-		return ERR_FAILED_CREATE;
-	}
-	for (index = 0; index < TEXTURE_CAPACITY; index++) {
-		p_gl_ghosts->gl_video_buffers[index] = gl_pixel_buffer_create(
-			width,
-			height,
-			GL_TEXTURE_2D,
-			GL_RGBA, 
-			GL_RGB,
-			GL_UNSIGNED_BYTE,
-			bits_per_pixel / 8,
-			GL_DYNAMIC_DRAW);
-		if (NULL == p_gl_ghosts->gl_video_buffers[index]) {
-			LOG_ERROR("failed to create screen");
-			return -1;
-		}
-	}
-
-	/* get width, height & bits per pixel info about depth stream */
-	error = kinect_manager_info(
-		p_gl_ghosts->kinect_manager,
-		KMI_DEPTH_BPP_SIZE_T,
-		(void*)&bits_per_pixel,
-		sizeof(bits_per_pixel));
-	if (NO_ERROR != error) {
-		return error;
-	}
-	error = kinect_manager_info(
-		p_gl_ghosts->kinect_manager,
-		KMI_DEPTH_WIDTH_SIZE_T,
-		(void*)&width,
-		sizeof(width));
-	if (NO_ERROR != error) {
-		return error;
-	}
-	error = kinect_manager_info(
-		p_gl_ghosts->kinect_manager,
-		KMI_DEPTH_HEIGHT_SIZE_T,
-		(void*)&height,
-		sizeof(height));
-	if (NO_ERROR != error) {
-		return error;
-	}
-	/* create depth pixel streaming buffer */
-	p_gl_ghosts->gl_live_depth_buffer = gl_pixel_buffer_create(
-		width,
-		height,
-		GL_TEXTURE_2D,
-		GL_RGBA,
-		GL_RED,
-		GL_UNSIGNED_SHORT,
-		bits_per_pixel / 8,
-		GL_DYNAMIC_DRAW);
-	if (NULL == p_gl_ghosts->gl_live_depth_buffer) {
-		LOG_ERROR("failed to create screen");
-		return ERR_FAILED_CREATE;
-	}
-	for (index = 0; index < TEXTURE_CAPACITY; index++) {
-		p_gl_ghosts->gl_depth_buffers[index] = gl_pixel_buffer_create(
-			width,
-			height,
-			GL_TEXTURE_2D,
-			GL_RGBA,
-			GL_RED,
-			GL_UNSIGNED_SHORT,
-			bits_per_pixel / 8,
-			GL_DYNAMIC_DRAW);
-		if (NULL == p_gl_ghosts->gl_depth_buffers[index]) {
-			LOG_ERROR("failed to create screen");
-			return ERR_FAILED_CREATE;
-		}
-	}
-
-	/* create the canvas, which is simply a square in 3D space upon which the
-	 * pixel buffers are drawn */
-	p_gl_ghosts->canvas = gl_canvas_create();
-	if (NULL == p_gl_ghosts->canvas) {
-		LOG_ERROR("failed to create canvas");
-		return ERR_FAILED_CREATE;
-	}
-	
-	/* load customized shader programs which handle depth cutoff and masking
-	 * of video data by depth data */
-	p_gl_ghosts->vertex_shader = gl_shader_load(
-		GL_VERTEX_SHADER,
-		p_gl_ghosts->vertex_shader_path);
-	if (p_gl_ghosts->vertex_shader == 0) {
-		LOG_ERROR("failed to load vertex shader");
-		return -1;
-	}
-	p_gl_ghosts->fragment_shader = gl_shader_load(
-		GL_FRAGMENT_SHADER,
-		p_gl_ghosts->fragment_shader_path);
-	if (p_gl_ghosts->fragment_shader == 0) {
-		LOG_ERROR("failed to load fragment shader");
-		return -1;
-	}
-	p_gl_ghosts->shader_program = gl_shader_program(
-		p_gl_ghosts->vertex_shader,
-		p_gl_ghosts->fragment_shader);
-	if (p_gl_ghosts->shader_program == 0) {
-		LOG_ERROR("failed to link shader program");
-		return -1;
-	}
-
-	/* get handles into shader program fro variables */
-	p_gl_ghosts->uniforms.live_video_texture
-		= glGetUniformLocation(p_gl_ghosts->shader_program, "live_video_texture");
-	p_gl_ghosts->uniforms.live_depth_texture
-		= glGetUniformLocation(p_gl_ghosts->shader_program, "live_depth_texture");
-	p_gl_ghosts->uniforms.live_depth_cutoff
-		= glGetUniformLocation(p_gl_ghosts->shader_program, "live_depth_cutoff");
-	p_gl_ghosts->uniforms.count
-		= glGetUniformLocation(p_gl_ghosts->shader_program, "count");
-	p_gl_ghosts->attributes.position
-		= glGetAttribLocation(p_gl_ghosts->shader_program, "position");
-	/* check that these uniforms retrieved successfully */
-	if ((p_gl_ghosts->uniforms.count < 0) || 
-		(p_gl_ghosts->uniforms.live_video_texture < 0) || 
-		(p_gl_ghosts->uniforms.live_depth_texture < 0) ||
-		(p_gl_ghosts->uniforms.live_depth_cutoff < 0) || 
-		(p_gl_ghosts->attributes.position < 0)) 
-	{
-		LOG_ERROR(
-			"failed to get uniform/attribute locations from shaders");
-		return ERR_FAILED_CREATE;
-	}	
-
-	/* get array of video textures, depth textures and depth cutoffs */
-	for (index = 0; index < TEXTURE_CAPACITY; index++) {
-		if (sprintf(uniform_string, "video_texture_%02i", (int)index) < 0) {
-			LOG_ERROR("failed to create string for uniform");
-			return ERR_FAILED_CREATE;
-		}
-		p_gl_ghosts->uniforms.video_textures[index]
-			= glGetUniformLocation(p_gl_ghosts->shader_program, uniform_string);
-		if (sprintf(uniform_string, "depth_texture_%02i", (int)index) < 0) {
-			LOG_ERROR("failed to create string for uniform");
-			return ERR_FAILED_CREATE;
-		}
-		p_gl_ghosts->uniforms.depth_textures[index]
-			= glGetUniformLocation(p_gl_ghosts->shader_program, uniform_string);
-		if (sprintf(uniform_string, "depth_cutoff_%02i", (int)index) < 0) {
-			LOG_ERROR("failed to create string for uniform");
-			return ERR_FAILED_CREATE;
-		}
-		p_gl_ghosts->uniforms.depth_cutoffs[index]
-			= glGetUniformLocation(p_gl_ghosts->shader_program, uniform_string);
-		if ((p_gl_ghosts->uniforms.video_textures[index] < 0) || 
-			(p_gl_ghosts->uniforms.depth_textures[index] < 0) ||
-			(p_gl_ghosts->uniforms.depth_cutoffs[index] < 0))
-		{
-			LOG_ERROR("failed to get uniform/attribute locations from shaders");
-			return ERR_FAILED_CREATE;
-		}	
-	}
-	return NO_ERROR;
 }
 
 void _display(void* data) {
@@ -556,18 +363,14 @@ void _display(void* data) {
 	}
 
 	/* prepare graphics card to accept new image data */
-	glUseProgram(p_gl_ghosts->shader_program);
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
-	glUniform1i(p_gl_ghosts->uniforms.count, (int)num_clips);
+	error = display_manager_prepare_frame(p_gl_ghosts->display_manager);
+	if (NO_ERROR != error) {
+		LOG_ERROR("error preparing frame");
+		return; 
+	}
 
 	/* loop through clips adding image data to opengl */
 	for (index = 0; index < num_clips; index++) {
-		/* TODO: currently setting same depth cutoff for all.  Will probably
-		 * want to make this specific to each clip in the future */
-		glUniform1f(
-			p_gl_ghosts->uniforms.depth_cutoffs[index], 
-			p_gl_ghosts->layers[index].depth);
 		/* get video and depth information from freerec */
 		error = freerec_clip_frame_count(p_gl_ghosts->freerec, index, &num_frames);
 		if (0 != error) {
@@ -593,6 +396,14 @@ void _display(void* data) {
 				LOG_ERROR("error getting frame");
 				num_frames = 0;
 			}
+			error = display_manager_set_frame_layer(
+				p_gl_ghosts->display_manager,
+				p_gl_ghosts->layers[index].depth,
+				video_buffer,
+				depth_buffer);
+			if (NO_ERROR != error) {
+				LOG_ERROR("error setting frame layer");
+			}
 
 
 			/*
@@ -601,71 +412,34 @@ void _display(void* data) {
 				p_gl_ghosts->frame_counters[index] = 0;
 			}
 			*/
-			
-			if (video_buffer) {
-				gl_pixel_buffer_set_data(
-					p_gl_ghosts->gl_video_buffers[index],
-					video_buffer);
-				gl_pixel_buffer_display(
-					p_gl_ghosts->gl_video_buffers[index],
-					p_gl_ghosts->uniforms.video_textures[index]);
-			}
-
-			if (depth_buffer) {
-				gl_pixel_buffer_set_data(
-					p_gl_ghosts->gl_depth_buffers[index],
-					depth_buffer);
-				/* use GL_RED_SCALE because the depth data only has 1 number 
-				 * per pixel */
-				glPixelTransferf(GL_RED_SCALE, p_gl_ghosts->depth_scale);
-				gl_pixel_buffer_display(
-					p_gl_ghosts->gl_depth_buffers[index],
-					p_gl_ghosts->uniforms.depth_textures[index]);
-				glPixelTransferf(GL_RED_SCALE, 1.0f);
-			}
 		}
 	}
 	/* display live data */
 	error = kinect_manager_live_video(
 		p_gl_ghosts->kinect_manager,
 		&video_buffer);
-	if (NO_ERROR == error) {
-		glUniform1f(
-			p_gl_ghosts->uniforms.live_depth_cutoff,
-			p_gl_ghosts->depth_cutoff);
-		gl_pixel_buffer_set_data(p_gl_ghosts->gl_live_video_buffer, video_buffer);
-		gl_pixel_buffer_display(
-			p_gl_ghosts->gl_live_video_buffer,
-			p_gl_ghosts->uniforms.live_video_texture);
+	if (NO_ERROR != error) {
+		LOG_ERROR("failed to get live video frame");
 	}
-	else {
-		LOG_WARNING("failed to get live video frame");
-	}
-
 	error = kinect_manager_live_depth(
 		p_gl_ghosts->kinect_manager,
 		&depth_buffer);
-	if (NO_ERROR == error) {
-		gl_pixel_buffer_set_data(p_gl_ghosts->gl_live_depth_buffer, depth_buffer);
-		/* use GL_RED_SCALE because the depth data only has 1 number 
-		 * per pixel */
-		glPixelTransferf(GL_RED_SCALE, p_gl_ghosts->depth_scale);
-		gl_pixel_buffer_display(
-			p_gl_ghosts->gl_live_depth_buffer,
-			p_gl_ghosts->uniforms.live_depth_texture);
-		glPixelTransferf(GL_RED_SCALE, 1.0f);
+	if (NO_ERROR != error) {
+		LOG_ERROR("failed to get live video frame");
 	}
-	else {
-		LOG_WARNING("failed to get live video frame");
+	error = display_manager_set_frame_layer(
+		p_gl_ghosts->display_manager,
+		p_gl_ghosts->depth_cutoff,
+		video_buffer,
+		depth_buffer);
+	if (NO_ERROR != error) {
+		LOG_ERROR("error setting frame layer");
 	}
 
-	/* set canvas to draw */
-	gl_canvas_display(
-		p_gl_ghosts->canvas,
-		p_gl_ghosts->attributes.position);
-	
-	/* apply new buffer */
-	glutSwapBuffers();
+	error = display_manager_display_frame(p_gl_ghosts->display_manager);
+	if (NO_ERROR != error) {
+		LOG_ERROR("error displaying frame");
+	}
 }
 
 void _reshape(int width, int height, void* data) {
@@ -811,7 +585,8 @@ void _video_cb(
 	if (TRUE == p_ghosts->do_record) {
 		error = freerec_capture_video(p_ghosts->freerec, video_data, timestamp);
 		if (NO_ERROR != error) {
-			LOG_ERROR("error capturing video frame");
+			LOG_ERROR("error capturing video frame[%i](%s)", error, error_string(error));
+			LOG_ERROR("timestamp %f", timestamp);
 			return;
 		}
 	}
@@ -835,7 +610,8 @@ void _depth_cb(
 	if (p_ghosts->do_record) {
 		error = freerec_capture_depth(p_ghosts->freerec, depth_data, timestamp);
 		if (NO_ERROR != error) {
-			LOG_ERROR("error capturing depth frame");
+			LOG_ERROR("error capturing depth frame [%i](%s)", error, error_string(error));
+			LOG_ERROR("timestamp %f", timestamp);
 			return;
 		}
 	}
@@ -847,11 +623,13 @@ void _cleanup(void* data) {
 		return;
 	}
 	/* clean up */
+	display_manager_destroy(p_gl_ghosts->display_manager);
 	kinect_manager_destroy(p_gl_ghosts->kinect_manager);
 	command_destroy(p_gl_ghosts->cmdr);
 	freerec_release(p_gl_ghosts->freerec);
 	timer_release(p_gl_ghosts->playback_timer);
 	p_gl_ghosts->playback_timer = NULL;
+
 	/* TODO: lots of other cleanup */
 }
 
@@ -894,7 +672,7 @@ int _start_recording(gl_ghosts* p_gl_ghosts) {
 		return status;
 	}
 
-	if (num_clips >= TEXTURE_CAPACITY) {
+	if (num_clips >= (TEXTURE_CAPACITY - 1)) {
 		LOG_WARNING("cannot create any more clips");
 		return NO_ERROR;
 	}
@@ -937,7 +715,7 @@ int _stop_recording(gl_ghosts* p_gl_ghosts) {
 		LOG_ERROR("failed to get clip count");
 		return status;
 	}
-	if (count >= TEXTURE_CAPACITY) {
+	if (count >= (TEXTURE_CAPACITY - 1)) {
 		LOG_WARNING("cannot create any more clips");
 		return NO_ERROR;
 	}

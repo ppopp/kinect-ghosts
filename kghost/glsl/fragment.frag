@@ -1,7 +1,3 @@
-
-uniform sampler2D live_video_texture;
-uniform sampler2D live_depth_texture;
-uniform float live_depth_cutoff;
 uniform int count;
 uniform sampler2D video_texture_00;
 uniform sampler2D depth_texture_00;
@@ -24,6 +20,9 @@ uniform float depth_cutoff_05;
 uniform sampler2D video_texture_06;
 uniform sampler2D depth_texture_06;
 uniform float depth_cutoff_06;
+uniform sampler2D video_texture_07;
+uniform sampler2D depth_texture_07;
+uniform float depth_cutoff_07;
 
 varying vec2 texcoord;
 
@@ -134,12 +133,12 @@ void main()
 			depth_cutoff_06,
 			best_depth);
 	}
-
-	// place newest clip on top
-	best_depth = add_sampler(
-		live_video_texture, 
-		live_depth_texture, 
-		live_depth_cutoff, 
-		best_depth);
+	if (count > 7) {
+		best_depth = add_sampler(
+			video_texture_07,
+			depth_texture_07,
+			depth_cutoff_07,
+			best_depth);
+	}
 }
 

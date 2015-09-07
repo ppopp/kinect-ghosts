@@ -41,6 +41,8 @@ typedef unsigned timestamp_t;
 
 typedef int (*comparison_function)(const void*, const void*);
 
+const char* error_string(status_t code);
+
 #define TRUE (1)
 #define FALSE (0)
 

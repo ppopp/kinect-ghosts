@@ -9,7 +9,8 @@
 extern "C" {
 #endif
 
-	GLuint gl_shader_load(GLenum type, const char* path);
+	GLuint gl_shader_load_file(GLenum type, const char* path);
+	GLuint gl_shader_load_source(GLenum type, const char* source, int length);
 	GLuint gl_shader_program(GLuint vertexShader, GLuint fragmentShader);
 
 

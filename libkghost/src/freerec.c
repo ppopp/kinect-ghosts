@@ -407,6 +407,7 @@ status_t _freerec_capture_data(
 			sizeof(timestamp_t));
 	}
 	else {
+		memset(handle->current_frame, 0, handle->frame_size);
 		return ERR_INVALID_TIMESTAMP;
 	}
 	return NO_ERROR;

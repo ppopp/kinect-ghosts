@@ -17,11 +17,10 @@ static void gl_shader_info_log(
 	PFNGLGETSHADERINFOLOGPROC glGet__InfoLog);
 */
 
-GLuint gl_shader_load(GLenum type, const char* path) {
+GLuint gl_shader_load_file(GLenum type, const char* path) {
 	GLint length = 0;
 	size_t readSize = 0;
 	GLuint shader = 0;
-	GLint shader_ok = 0;
 	GLchar *source = NULL;
 	FILE *pFile = 0;
 
@@ -61,10 +60,22 @@ GLuint gl_shader_load(GLenum type, const char* path) {
 		return 0;
 	}
 
+	shader = gl_shader_load_source(type, source, length);
+	free(source);
+	return shader;
+}
+
+GLuint gl_shader_load_source(GLenum type, const GLchar* source, GLint length) {
+	GLuint shader = 0;
+	GLint shader_ok = 0;
+
+	if (NULL == source) {
+		LOG_ERROR("null shader source");
+		return 0;
+	}
+
 	shader = glCreateShader(type);
 	glShaderSource(shader, 1, (const GLchar**)&source, &length);
-	free(source);
-	source = NULL;
 	glCompileShader(shader);
 	glGetShaderiv(shader, GL_COMPILE_STATUS, &shader_ok);
 	if (!shader_ok) {
