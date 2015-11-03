@@ -26,7 +26,11 @@
 
 #define ERR_FAILED_TIMER (-13)
 #define ERR_DEVICE_ERROR (-14)
+#define ERR_UNSUPPORTED_ARCHITECTURE (-15)
+#define ERR_UNSUPPORTED_FORMAT (-16)
 
+
+#include <stddef.h>
 
 
 
@@ -35,6 +39,8 @@ typedef int status_t;
 typedef unsigned char byte_t;
 typedef unsigned char bool_t;
 typedef double timestamp_t;
+typedef size_t frame_id_t;
+
 /*
 typedef unsigned timestamp_t;
 */

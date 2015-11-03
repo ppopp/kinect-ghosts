@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>IDESourceControlProjectFavoriteDictionaryKey</key>
+	<false/>
+	<key>IDESourceControlProjectIdentifier</key>
+	<string>CE86E2C7-64A8-443E-A024-8BDEABA7FDFE</string>
+	<key>IDESourceControlProjectName</key>
+	<string>kghost</string>
+	<key>IDESourceControlProjectOriginsDictionary</key>
+	<dict>
+		<key>16A925591936811958C18C197D8BBF5E4CB306EE</key>
+		<string>github.com:ppopp/kinect-ghosts.git</string>
+	</dict>
+	<key>IDESourceControlProjectPath</key>
+	<string>kghost/prj/xcode_6/kghost.xcodeproj</string>
+	<key>IDESourceControlProjectRelativeInstallPathDictionary</key>
+	<dict>
+		<key>16A925591936811958C18C197D8BBF5E4CB306EE</key>
+		<string>../../../../..</string>
+	</dict>
+	<key>IDESourceControlProjectURL</key>
+	<string>github.com:ppopp/kinect-ghosts.git</string>
+	<key>IDESourceControlProjectVersion</key>
+	<integer>111</integer>
+	<key>IDESourceControlProjectWCCIdentifier</key>
+	<string>16A925591936811958C18C197D8BBF5E4CB306EE</string>
+	<key>IDESourceControlProjectWCConfigurations</key>
+	<array>
+		<dict>
+			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
+			<string>public.vcs.git</string>
+			<key>IDESourceControlWCCIdentifierKey</key>
+			<string>16A925591936811958C18C197D8BBF5E4CB306EE</string>
+			<key>IDESourceControlWCCName</key>
+			<string>kinect-ghosts</string>
+		</dict>
+	</array>
+</dict>
+</plist>

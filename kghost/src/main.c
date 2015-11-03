@@ -1,10 +1,8 @@
 #include "glut_main.h"
-#include "gl_shader.h"
-#include "gl_canvas.h"
-#include "gl_pixel_buffer.h"
-#include "freerec.h"
-#include "vector.h"
+#include "frame_store.h"
 #include "timer.h"
+#include "median_filter.h"
+#include "motion_detector.h"
 
 #include "log.h"
 #include "command.h"
@@ -22,9 +20,57 @@
 #include <math.h>
 #include <unistd.h>
 #include <sys/time.h>
+#include <limits.h>
 
 /* Maximum string length of command entered through stdin */
 #define MAX_COMMAND_LENGTH (512)
+
+/* TODO: logic for automatically recording.  We have presence and motion.
+   some metrics might be:
+   	- maximum length
+	- minimum presence
+	- minimum motion
+	- minimum length
+
+	There really could be any logic for determining start and end and what plays.
+
+	The "director" controls the recording and playback.  probably want to keep things decoupled and have 
+	the director's communications with the display_manager and kinect_manager in main, but lets think
+	about that.
+
+	
+
+	[communication between director and display manager]
+	[main] show the next frame (timestamp)
+		[director] tells [display_manager] to display these frames (where does the director get the frames)
+		or 
+		[main] asks [director] for next frames and hands them to [display_manager]
+		[director] asks [display_manager] how many layers it can display.
+
+		? this sounds more like an editor
+
+	[communication between director and kinect_manager]
+		none.  
+
+	[communication between director and frame_store]
+	[director] determines wether [frame_store] should hold clip or not
+	[director] tells [frame_store] when to makr clip boundary 
+		- is that necessary though? can we store the sequence of frames elsewhere and just use the frame store
+		  as a data housing.  But then isn't that the memory pool? 
+	[director] cleans up clips by removing frames.  
+
+	So the main functionality is
+		- Cleanup clips
+		- Provide flexibility in how to playback clips (lots of cool stuff could happen here)
+		- Somehow manage recording.  Could just constantly record and then discard if the clip sucks.
+
+
+
+
+		
+
+
+*/
 
 
 #define DOWNSAMPLE (8)
@@ -47,6 +93,13 @@ typedef struct _layer_s {
 	size_t frame;
 } layer_t;
 
+typedef struct _stream_properties_s {
+	size_t width;
+	size_t height;
+	size_t bits_per_pixel;
+	size_t bytes_per_frame;
+} stream_properties_t;
+
 typedef struct _gl_ghosts {
 	/* Shader variables */
 	const char* vertex_shader_path;
@@ -58,13 +111,18 @@ typedef struct _gl_ghosts {
 	size_t commandPos;
 	commander cmdr;
 
-	freerec_handle_t freerec;
+	frame_store_handle_t frame_store;
 	bool_t do_record;
 	layer_t layers[TEXTURE_CAPACITY - 1];
 	timer_handle_t playback_timer;
 
 	kinect_manager_handle_t kinect_manager;
 	display_manager_handle_t display_manager;
+	stream_properties_t video_stream_properties;
+	stream_properties_t depth_stream_properties;
+	motion_detector_handle_t motion_detector;
+
+
 	
 } gl_ghosts; 
 
@@ -111,15 +169,15 @@ static int _stop_recording(gl_ghosts* p_gl_ghosts);
 /* layer stuff */
 static status_t _init_layer(
 	float depth, 
-	freerec_handle_t freerec, 
-	size_t freerec_clip_index, 
+	frame_store_handle_t frame_store, 
+	size_t frame_store_clip_index, 
 	layer_t* p_layer);
 
 static status_t _layer_get_next_frame(
 		layer_t* p_layer,
 		double time_delta,
-		freerec_handle_t freerec,
-		size_t freerec_clip_index,
+		frame_store_handle_t frame_store,
+		size_t frame_store_clip_index,
 		void** p_video_buffer,
 		void** p_depth_buffer);
 
@@ -153,14 +211,6 @@ int main(int argc, const char* argv[]) {
 int _init(void* data) {
 	status_t   error       = NO_ERROR;
 	size_t     index       = 0;
-	size_t     video_bytes = 0;
-	size_t     depth_bytes = 0;
-	size_t     video_bits_per_pixel = 0;
-	size_t     video_width = 0;
-	size_t     video_height = 0;
-	size_t     depth_bits_per_pixel = 0;
-	size_t     depth_width = 0;
-	size_t     depth_height = 0;
 	gl_ghosts* p_gl_ghosts = (gl_ghosts*)data;
 
 	/* initialize gl_ghosts structure */
@@ -172,7 +222,7 @@ int _init(void* data) {
 	p_gl_ghosts->cmdr = command_create();
 	command_set_callback(p_gl_ghosts->cmdr, _command_set);
 
-	p_gl_ghosts->freerec = NULL;
+	p_gl_ghosts->frame_store = NULL;
 	p_gl_ghosts->playback_timer = NULL;
 	p_gl_ghosts->do_record = FALSE;
 
@@ -207,8 +257,8 @@ int _init(void* data) {
 	error = kinect_manager_info(
 		p_gl_ghosts->kinect_manager,
 		KMI_VIDEO_BYTES_SIZE_T,
-		(void*)&video_bytes,
-		sizeof(video_bytes));
+		(void*)&p_gl_ghosts->video_stream_properties.bytes_per_frame,
+		sizeof(p_gl_ghosts->video_stream_properties.bytes_per_frame));
 	if (error != NO_ERROR) {
 		LOG_ERROR("failed getting info from kinect manager");
 		return error;
@@ -216,8 +266,8 @@ int _init(void* data) {
 	error = kinect_manager_info(
 		p_gl_ghosts->kinect_manager,
 		KMI_DEPTH_BYTES_SIZE_T,
-		(void*)&depth_bytes,
-		sizeof(depth_bytes));
+		(void*)&p_gl_ghosts->depth_stream_properties.bytes_per_frame,
+		sizeof(p_gl_ghosts->depth_stream_properties.bytes_per_frame));
 	if (error != NO_ERROR) {
 		LOG_ERROR("failed getting info from kinect manager");
 		return error;
@@ -225,8 +275,8 @@ int _init(void* data) {
 	error = kinect_manager_info(
 		p_gl_ghosts->kinect_manager,
 		KMI_VIDEO_BPP_SIZE_T,
-		(void*)&video_bits_per_pixel,
-		sizeof(video_bits_per_pixel));
+		(void*)&p_gl_ghosts->video_stream_properties.bits_per_pixel,
+		sizeof(p_gl_ghosts->video_stream_properties.bits_per_pixel));
 	if (NO_ERROR != error) {
 		LOG_ERROR("failed getting info from kinect manager");
 		return error;
@@ -234,8 +284,8 @@ int _init(void* data) {
 	error = kinect_manager_info(
 		p_gl_ghosts->kinect_manager,
 		KMI_VIDEO_WIDTH_SIZE_T,
-		(void*)&video_width,
-		sizeof(video_width));
+		(void*)&p_gl_ghosts->video_stream_properties.width,
+		sizeof(p_gl_ghosts->video_stream_properties.width));
 	if (NO_ERROR != error) {
 		LOG_ERROR("failed getting info from kinect manager");
 		return error;
@@ -243,8 +293,8 @@ int _init(void* data) {
 	error = kinect_manager_info(
 		p_gl_ghosts->kinect_manager,
 		KMI_VIDEO_HEIGHT_SIZE_T,
-		(void*)&video_height,
-		sizeof(video_height));
+		(void*)&p_gl_ghosts->video_stream_properties.height,
+		sizeof(p_gl_ghosts->video_stream_properties.height));
 	if (NO_ERROR != error) {
 		LOG_ERROR("failed getting info from kinect manager");
 		return error;
@@ -252,8 +302,8 @@ int _init(void* data) {
 	error = kinect_manager_info(
 		p_gl_ghosts->kinect_manager,
 		KMI_DEPTH_BPP_SIZE_T,
-		(void*)&depth_bits_per_pixel,
-		sizeof(depth_bits_per_pixel));
+		(void*)&p_gl_ghosts->depth_stream_properties.bits_per_pixel,
+		sizeof(p_gl_ghosts->depth_stream_properties.bits_per_pixel));
 	if (NO_ERROR != error) {
 		LOG_ERROR("failed getting info from kinect manager");
 		return error;
@@ -261,8 +311,8 @@ int _init(void* data) {
 	error = kinect_manager_info(
 		p_gl_ghosts->kinect_manager,
 		KMI_DEPTH_WIDTH_SIZE_T,
-		(void*)&depth_width,
-		sizeof(depth_width));
+		(void*)&p_gl_ghosts->depth_stream_properties.width,
+		sizeof(p_gl_ghosts->depth_stream_properties.width));
 	if (NO_ERROR != error) {
 		LOG_ERROR("failed getting info from kinect manager");
 		return error;
@@ -270,8 +320,8 @@ int _init(void* data) {
 	error = kinect_manager_info(
 		p_gl_ghosts->kinect_manager,
 		KMI_DEPTH_HEIGHT_SIZE_T,
-		(void*)&depth_height,
-		sizeof(depth_height));
+		(void*)&p_gl_ghosts->depth_stream_properties.height,
+		sizeof(p_gl_ghosts->depth_stream_properties.height));
 	if (NO_ERROR != error) {
 		LOG_ERROR("failed getting info from kinect manager");
 		return error;
@@ -279,21 +329,22 @@ int _init(void* data) {
 
 
 	/* initialize kinect recording */
-	error = freerec_create(
-		video_bytes,
-		depth_bytes,
+	error = frame_store_create(
+		p_gl_ghosts->video_stream_properties.bytes_per_frame,
+		p_gl_ghosts->depth_stream_properties.bytes_per_frame,
 		_max_recorded_bytes,
-		&(p_gl_ghosts->freerec));
+		&(p_gl_ghosts->frame_store));
 	if (NO_ERROR != error) {
-		LOG_ERROR("failed to init freerec");
+		LOG_ERROR("failed to init frame_store");
 		return error;
 	}
-	error = freerec_action(p_gl_ghosts->freerec);
+	error = frame_store_mark_clip_boundary(p_gl_ghosts->frame_store);
 	if (NO_ERROR != error) {
-		LOG_ERROR("failed to init freerec");
+		LOG_ERROR("failed to init frame_store");
 		return error;
 	}
 
+	/* initialize display layers */
 	for (index = 0; index < (TEXTURE_CAPACITY - 1); index++) {
 		p_gl_ghosts->layers[index].depth = 0.0f;
 		p_gl_ghosts->layers[index].time = 0.0;
@@ -310,22 +361,41 @@ int _init(void* data) {
 	error = display_manager_create(
 		p_gl_ghosts->vertex_shader_path,
 		p_gl_ghosts->fragment_shader_path,
-		video_bits_per_pixel,
-		video_width,
-		video_height,
-		depth_bits_per_pixel,
-		depth_width,
-		depth_height,
+		p_gl_ghosts->video_stream_properties.bits_per_pixel,
+		p_gl_ghosts->video_stream_properties.width,
+		p_gl_ghosts->video_stream_properties.height,
+		p_gl_ghosts->depth_stream_properties.bits_per_pixel,
+		p_gl_ghosts->depth_stream_properties.width,
+		p_gl_ghosts->depth_stream_properties.height,
 		p_gl_ghosts->depth_scale,
 		&p_gl_ghosts->display_manager);
 
 	if (error != NO_ERROR) {
 		LOG_ERROR("failed to init dispaly manager");
 	}
+
+	/* initialize motion detector */
+	if ((p_gl_ghosts->depth_stream_properties.bits_per_pixel % CHAR_BIT) != 0) {
+		LOG_ERROR("depth pixels not byte aligned");
+		return ERR_UNSUPPORTED_FORMAT;
+	}
+	error = motion_detector_create(
+		p_gl_ghosts->depth_stream_properties.bits_per_pixel / CHAR_BIT,
+		p_gl_ghosts->depth_stream_properties.width * p_gl_ghosts->depth_stream_properties.height,
+		TRUE,
+		&p_gl_ghosts->motion_detector);
+	if (error != NO_ERROR) {
+		LOG_ERROR("failed to init motion detector");
+	}
+
 	return error;
 }
 
 void _display(void* data) {
+	/* GLUT display callback.  
+	 *
+	 * Take all stored layers/frames and push to the screen.
+	 */
 	status_t   error        = NO_ERROR;
 	gl_ghosts* p_gl_ghosts  = (gl_ghosts*)data;
 	size_t     num_frames   = 0;
@@ -335,6 +405,9 @@ void _display(void* data) {
 	void*      depth_buffer = NULL;
 	double     delta        = 0.0;
 
+	/* This was added to speed things up by skipping frames. 
+	 * TODO: is there a better way to make sure that playback does not slow
+	 * down? */
 	_downsample_counter++;
 	if ((_downsample_counter % DOWNSAMPLE) != 0) {
 		return;
@@ -356,7 +429,7 @@ void _display(void* data) {
 		return; 
 	}
 
-	error = freerec_clip_count(p_gl_ghosts->freerec, &num_clips);
+	error = frame_store_clip_count(p_gl_ghosts->frame_store, &num_clips);
 	if (0 != error) {
 		LOG_ERROR("error getting clip count");
 		return; 
@@ -371,8 +444,8 @@ void _display(void* data) {
 
 	/* loop through clips adding image data to opengl */
 	for (index = 0; index < num_clips; index++) {
-		/* get video and depth information from freerec */
-		error = freerec_clip_frame_count(p_gl_ghosts->freerec, index, &num_frames);
+		/* get video and depth information from frame_store */
+		error = frame_store_frame_count(p_gl_ghosts->frame_store, index, &num_frames);
 		if (0 != error) {
 			LOG_ERROR("error getting frame count");
 			num_frames = 0;
@@ -388,7 +461,7 @@ void _display(void* data) {
 			error = _layer_get_next_frame(
 				&(p_gl_ghosts->layers[index]),
 				delta,
-				p_gl_ghosts->freerec,
+				p_gl_ghosts->frame_store,
 				index,
 				&video_buffer,
 				&depth_buffer);
@@ -404,14 +477,6 @@ void _display(void* data) {
 			if (NO_ERROR != error) {
 				LOG_ERROR("error setting frame layer");
 			}
-
-
-			/*
-			p_gl_ghosts->frame_counters[index]++;
-			if (p_gl_ghosts->frame_counters[index] >= num_frames) {
-				p_gl_ghosts->frame_counters[index] = 0;
-			}
-			*/
 		}
 	}
 	/* display live data */
@@ -447,6 +512,9 @@ void _reshape(int width, int height, void* data) {
 }
 
 void _idle(void* data) {
+	/* During idle time the kinect device is queried in order to capture the 
+	 * next frame.
+	 */
 	bool_t captured = FALSE;
 	status_t status = NO_ERROR;
 
@@ -459,10 +527,12 @@ void _idle(void* data) {
 	status = kinect_manager_capture_frame(
 		p_gl_ghosts->kinect_manager,
 		&captured);
+
 	if (NO_ERROR != status) {
 		LOG_ERROR("error while capturing frame");
 	}
 	if (captured) {
+		/* If a new frame was captured, we redisplay the output */
 		glutPostRedisplay();
 	}
 	else {
@@ -472,6 +542,8 @@ void _idle(void* data) {
 
 void _keyboard(unsigned char key, int mouseX, int mouseY, void* data) {
 	gl_ghosts* p_gl_ghosts = (gl_ghosts*)data;
+	status_t status = NO_ERROR;
+
 	if (p_gl_ghosts == NULL) {
 		LOG_WARNING("null pointer");
 		return;
@@ -505,12 +577,16 @@ void _keyboard(unsigned char key, int mouseX, int mouseY, void* data) {
 	}
 	else if ((key == _spacebar) && (p_gl_ghosts->commandPos == 0)) {
 		if (p_gl_ghosts->do_record) {
-			_stop_recording(p_gl_ghosts);
-			LOG_INFO("stopping recording");
+			status = _stop_recording(p_gl_ghosts);
+			if (NO_ERROR == status) {
+				LOG_INFO("stopping recording");
+			}
 		}
 		else {
-			_start_recording(p_gl_ghosts);
-			LOG_INFO("starting recording");
+			status = _start_recording(p_gl_ghosts);
+			if (NO_ERROR == status) {
+				LOG_INFO("starting recording");
+			}
 		}
 	}
 	else {
@@ -583,7 +659,7 @@ void _video_cb(
 	}
 
 	if (TRUE == p_ghosts->do_record) {
-		error = freerec_capture_video(p_ghosts->freerec, video_data, timestamp);
+		error = frame_store_capture_video(p_ghosts->frame_store, video_data, timestamp);
 		if (NO_ERROR != error) {
 			LOG_ERROR("error capturing video frame[%i](%s)", error, error_string(error));
 			LOG_ERROR("timestamp %f", timestamp);
@@ -600,6 +676,9 @@ void _depth_cb(
 {
 	gl_ghosts* p_ghosts = NULL;
 	status_t error = NO_ERROR;
+	double motion = 0.0;
+	double presence = 0.0;
+	unsigned short cutoff = 0;
 	
 	p_ghosts = (gl_ghosts*)user_data;
 	if (NULL == p_ghosts) {
@@ -607,14 +686,31 @@ void _depth_cb(
 		return;
 	}
 
+
 	if (p_ghosts->do_record) {
-		error = freerec_capture_depth(p_ghosts->freerec, depth_data, timestamp);
+		error = frame_store_capture_depth(p_ghosts->frame_store, depth_data, timestamp);
 		if (NO_ERROR != error) {
 			LOG_ERROR("error capturing depth frame [%i](%s)", error, error_string(error));
 			LOG_ERROR("timestamp %f", timestamp);
 			return;
 		}
 	}
+
+	cutoff = (short)((unsigned)(p_ghosts->depth_cutoff * 65536) / p_ghosts->depth_scale);
+	error = motion_detector_detect(
+		p_ghosts->motion_detector,
+		depth_data,
+		//(unsigned)(p_ghosts->depth_cutoff * 65536) / p_ghosts->depth_scale,
+		(unsigned)cutoff,
+		&motion,
+		&presence);
+
+	if (NO_ERROR != error) {
+		LOG_ERROR("failed to calculate motion");
+		return;
+	}
+
+	fprintf(stdout, "c: %u\tp: %f\tm:%f\n", cutoff, presence, motion);
 }
 
 void _cleanup(void* data) {
@@ -626,7 +722,7 @@ void _cleanup(void* data) {
 	display_manager_destroy(p_gl_ghosts->display_manager);
 	kinect_manager_destroy(p_gl_ghosts->kinect_manager);
 	command_destroy(p_gl_ghosts->cmdr);
-	freerec_release(p_gl_ghosts->freerec);
+	frame_store_release(p_gl_ghosts->frame_store);
 	timer_release(p_gl_ghosts->playback_timer);
 	p_gl_ghosts->playback_timer = NULL;
 
@@ -666,7 +762,7 @@ int _start_recording(gl_ghosts* p_gl_ghosts) {
 	}
 
 	/* check to make sure we can handle a new clip */
-	status = freerec_clip_count(p_gl_ghosts->freerec, &num_clips);
+	status = frame_store_clip_count(p_gl_ghosts->frame_store, &num_clips);
 	if (NO_ERROR != status) {
 		LOG_ERROR("failed to get clip count");
 		return status;
@@ -674,7 +770,7 @@ int _start_recording(gl_ghosts* p_gl_ghosts) {
 
 	if (num_clips >= (TEXTURE_CAPACITY - 1)) {
 		LOG_WARNING("cannot create any more clips");
-		return NO_ERROR;
+		return ERR_FULL;
 	}
 
 	status = kinect_manager_reset_timestamp(p_gl_ghosts->kinect_manager);
@@ -686,6 +782,109 @@ int _start_recording(gl_ghosts* p_gl_ghosts) {
 	p_gl_ghosts->do_record = TRUE;
 
 	return NO_ERROR;
+}
+
+static int _compare_pixel_uint16(const void* p_left, const void* p_right) {
+	/* TODO: going to hack this up, but really need this to be contigent on the
+	 * number of bits in the depth frame's pixels */
+	const unsigned short* p_char_left = (const unsigned short*)p_left;
+	const unsigned short* p_char_right = (const unsigned short*)p_right;
+
+	/* TODO: I always forget what the order is supposed to be for this... */
+	if (*p_char_left < *p_char_right) {
+		return -1;
+	}
+	if (*p_char_right < *p_char_left) {
+		return 1;
+	}
+	return 0;
+}
+
+static void _median_filter_last(gl_ghosts* p_gl_ghosts) {
+	median_filter_handle_t med_filt = NULL;
+	status_t status = NO_ERROR;
+	median_filter_shape_t shape;
+	median_filter_input_spec_t input_spec;
+	size_t clip_count = 0;
+	size_t frame_count = 0;
+	size_t clip_to_modify = 0;
+	size_t frame = 0;
+
+	/* set median filter shape */
+	shape.x = 3;
+	shape.y = 3;
+	shape.z = 3;
+
+	/* determine which clip we'll be modifying */
+	status = frame_store_clip_count(p_gl_ghosts->frame_store, &clip_count);
+	if (NO_ERROR != status) {
+		LOG_ERROR("shit");
+		return;
+	}
+	if (clip_count < 1) {
+		LOG_ERROR("shit");
+		return;
+	}
+
+	/* get number of frames in clip */
+	clip_to_modify = clip_count - 1;
+	status = frame_store_frame_count(
+		p_gl_ghosts->frame_store,
+		clip_to_modify,
+		&frame_count);
+	if (NO_ERROR != status) {
+		LOG_ERROR("shit");
+		return;
+	}
+	if (frame_count < 1) {
+		LOG_ERROR("shit");
+		return;
+	}
+
+	/* set median filter input spec */
+	input_spec.element_size = 
+		p_gl_ghosts->depth_stream_properties.bits_per_pixel / CHAR_BIT;
+	input_spec.channel_count = 1;
+	input_spec.width = p_gl_ghosts->depth_stream_properties.width;
+	input_spec.height = p_gl_ghosts->depth_stream_properties.height;
+
+	status = median_filter_create(
+		input_spec,
+		shape,
+		&_compare_pixel_uint16,
+		&med_filt);
+	if (NO_ERROR != status) {
+		LOG_ERROR("shit");
+		return;
+	}
+
+	for (frame = 0; frame < frame_count; frame++) {
+		void* data = NULL;
+		timestamp_t timestamp;
+
+		status = frame_store_depth_frame(
+			p_gl_ghosts->frame_store,
+			clip_to_modify,
+			frame,
+			&data,
+			&timestamp);
+		if (NO_ERROR != status) {
+			LOG_ERROR("shit");
+			break;
+		}
+		status = median_filter_append(med_filt, data);
+		if (NO_ERROR != status) {
+			LOG_ERROR("shit");
+			break;
+		}
+	}
+	if (NO_ERROR == status) {
+		status = median_filter_apply(med_filt);
+		if (NO_ERROR != status) {
+			LOG_ERROR("shit");
+		}
+	}
+	median_filter_release(med_filt);
 }
 
 int _stop_recording(gl_ghosts* p_gl_ghosts) {
@@ -703,14 +902,21 @@ int _stop_recording(gl_ghosts* p_gl_ghosts) {
 	p_gl_ghosts->do_record = FALSE;
 
 	/* start new clip */
-	status = freerec_action(p_gl_ghosts->freerec);
+	status = frame_store_mark_clip_boundary(p_gl_ghosts->frame_store);
 	if (NO_ERROR != status) {
 		LOG_ERROR("failed to start new clip");
 		return status;
 	}
 
+
+	/* TODO: HACK:
+	 * testing out median filtering of the depth channel here.  All the stuff
+	 * can be removed and should be integrated in a better place */
+	//_median_filter_last(p_gl_ghosts);
+	/** END TODO: END HACK */
+
 	/* initialize new layer for display */
-	status = freerec_clip_count(p_gl_ghosts->freerec, &count);
+	status = frame_store_clip_count(p_gl_ghosts->frame_store, &count);
 	if (NO_ERROR != status) {
 		LOG_ERROR("failed to get clip count");
 		return status;
@@ -723,7 +929,7 @@ int _stop_recording(gl_ghosts* p_gl_ghosts) {
 	last_clip = count - 1;
 	status = _init_layer(
 		p_gl_ghosts->depth_cutoff,
-		p_gl_ghosts->freerec,
+		p_gl_ghosts->frame_store,
 		last_clip,
 		&(p_gl_ghosts->layers[last_clip]));
 	if (NO_ERROR != status) {
@@ -736,8 +942,8 @@ int _stop_recording(gl_ghosts* p_gl_ghosts) {
 
 status_t _init_layer(
 	float depth, 
-	freerec_handle_t freerec, 
-	size_t freerec_clip_index, 
+	frame_store_handle_t frame_store, 
+	size_t frame_store_clip_index, 
 	layer_t* p_layer)
 {
 	status_t status  = NO_ERROR;
@@ -746,9 +952,9 @@ status_t _init_layer(
 	p_layer->depth = depth;
 	p_layer->frame = 0;
 	/* get timestamp of first frame */
-	status = freerec_clip_video_frame(
-		freerec,
-		freerec_clip_index,
+	status = frame_store_video_frame(
+		frame_store,
+		frame_store_clip_index,
 		0,
 		&p_dummy,
 		&(p_layer->time));
@@ -758,9 +964,9 @@ status_t _init_layer(
 		return status;
 	}
 	/* get next timestamp */
-	status = freerec_clip_video_frame(
-		freerec,
-		freerec_clip_index,
+	status = frame_store_video_frame(
+		frame_store,
+		frame_store_clip_index,
 		1,
 		&p_dummy,
 		&(p_layer->next_time));
@@ -776,8 +982,8 @@ status_t _init_layer(
 status_t _layer_get_next_frame(
 		layer_t* p_layer,
 		double time_delta,
-		freerec_handle_t freerec,
-		size_t freerec_clip_index,
+		frame_store_handle_t frame_store,
+		size_t frame_store_clip_index,
 		void** p_video_buffer,
 		void** p_depth_buffer)
 {
@@ -792,7 +998,7 @@ status_t _layer_get_next_frame(
 	if (p_layer->time >= p_layer->next_time) {
 		/* increment frame */
 		p_layer->frame += 1;
-		error = freerec_clip_frame_count(freerec, freerec_clip_index, &count);
+		error = frame_store_frame_count(frame_store, frame_store_clip_index, &count);
 		if (0 != error) {
 			LOG_ERROR("error getting frames");
 			return error;
@@ -800,9 +1006,9 @@ status_t _layer_get_next_frame(
 		/* check for rollover of clip and loop if necessary */
 		if (p_layer->frame >= count) {
 			p_layer->frame = 0;
-			error = freerec_clip_video_frame(
-				freerec, 
-				freerec_clip_index,
+			error = frame_store_video_frame(
+				frame_store, 
+				frame_store_clip_index,
 				0,
 				&dummy,
 				&(p_layer->time));
@@ -816,9 +1022,9 @@ status_t _layer_get_next_frame(
 		if (next_frame >= count) {
 			next_frame = 0;
 		}
-		error = freerec_clip_video_frame(
-			freerec, 
-			freerec_clip_index,
+		error = frame_store_video_frame(
+			frame_store, 
+			frame_store_clip_index,
 			next_frame,
 			&dummy,
 			&(p_layer->next_time));
@@ -828,9 +1034,9 @@ status_t _layer_get_next_frame(
 		}
 	}
 
-	error = freerec_clip_video_frame(
-		freerec,
-		freerec_clip_index,
+	error = frame_store_video_frame(
+		frame_store,
+		frame_store_clip_index,
 		p_layer->frame,
 		p_video_buffer,
 		&timestamp);
@@ -838,9 +1044,9 @@ status_t _layer_get_next_frame(
 		LOG_ERROR("error getting frames");
 		return error;
 	}
-	error = freerec_clip_depth_frame(
-		freerec,
-		freerec_clip_index,
+	error = frame_store_depth_frame(
+		frame_store,
+		frame_store_clip_index,
 		p_layer->frame,
 		p_depth_buffer,
 		&timestamp);
