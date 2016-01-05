@@ -6,7 +6,7 @@ TEST(MotionDetector, CreateRelease) {
 	motion_detector_handle_t handle = NULL;
 
 	status = motion_detector_create(
-		2, 1, &handle);
+		2, 1, FALSE, &handle);
 	ASSERT_EQ(status, NO_ERROR);
 	ASSERT_TRUE(NULL != handle);
 	motion_detector_release(handle);
@@ -34,11 +34,15 @@ TEST(MotionDetector, Smoke) {
 	status = motion_detector_create(
 		sizeof(short), 
 		width * height, 
+		FALSE,
 		&handle);
 	ASSERT_TRUE(NULL != handle);
 	ASSERT_EQ(status, NO_ERROR);
 
 	motion = -1.0;
+    /* TODO: logic is wrong on presence & motion.  This assumes
+     * that the comparison was made for pixels > cutoff, but it's actually
+     * the other way around because we're dealing with the depth buffer */
 	status = motion_detector_detect(
 		handle,
 		(void*)frame_a,

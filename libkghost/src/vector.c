@@ -135,7 +135,28 @@ status_t vector_clear(vector_handle_t handle) {
 	return NO_ERROR;
 }
 
-status_t vector_element(
+status_t vector_element_copy(
+	vector_handle_t handle, 
+	size_t index, 
+	void* p_element)
+{
+	if ((NULL == handle) || (NULL == p_element)) {
+		return ERR_NULL_POINTER;
+	}
+
+	if (index >= handle->count) {
+		return ERR_RANGE_ERROR;
+	}
+
+	memcpy(
+		p_element,
+		&(handle->array[index * handle->element_size]),
+		handle->element_size);
+
+	return NO_ERROR;
+}
+
+status_t vector_element_address(
 	vector_handle_t handle, 
 	size_t index, 
 	void** pp_element)

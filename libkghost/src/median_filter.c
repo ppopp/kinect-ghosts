@@ -250,7 +250,7 @@ status_t median_filter_apply(median_filter_handle_t handle) {
 
 	push_pos = half_z_medfilt + 1;
 	while (out_z < frame_count) {
-		status = vector_element(handle->frames, out_z, (void**)&data);
+		status = vector_element_address(handle->frames, out_z, (void**)&data);
         out = *data;
 		if (NO_ERROR != status) {
 			return status;

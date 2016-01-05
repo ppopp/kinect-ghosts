@@ -2,6 +2,7 @@
 #include "common.h"
 #include "rb_tree.h"
 #include "stack.h"
+#include "log.h"
 
 #include <unistd.h>
 #include <pthread.h>
@@ -26,8 +27,8 @@ typedef struct memory_pool_s {
 	size_t chunk_size;
 	size_t min_reserve_chunks;
 	size_t max_reserve_chunks;
-	size_t max_bytes;
-	size_t generated_bytes;
+	size_t max_chunks;
+	size_t generated_chunks;
 	stack_handle_t generated;
 	rb_tree_handle_t claimed;
 	stack_handle_t available;
@@ -84,8 +85,8 @@ status_t memory_pool_create(
 	pool->chunk_size = chunkSize;
 	pool->min_reserve_chunks = minReserve;
 	pool->max_reserve_chunks = maxReserve;
-	pool->max_bytes = maxBytes;
-	pool->generated_bytes = 0;
+	pool->max_chunks = maxBytes / chunkSize;
+	pool->generated_chunks = 0;
 	pool->period_microseconds = periodMicroseconds;
 	pool->claimed = NULL;
 	pool->generated = NULL;
@@ -334,19 +335,22 @@ void* _memory_pool_thread(void* data) {
 			chunkCount = pool->max_reserve_chunks - availableChunks;
 			while (
 				(chunkCount > 0) &&
-				((pool->chunk_size * chunkCount + pool->generated_bytes) 
-				 	> pool->max_bytes))
+				((chunkCount + pool->generated_chunks) > pool->max_chunks))
 			{
 				chunkCount--;
+				LOG_DEBUG("chunk count %u", chunkCount);
 			}
 
 			while ((chunkCount != 0) && (status == NO_ERROR)) {
+				LOG_DEBUG("chunks to generate %u", chunkCount);
 				status = _memory_pool_generate_chunk(pool, pool->generated);
 				chunkCount--;
 			}
 			if (NO_ERROR != status) {
 				pthread_exit(NULL);
 			}
+
+			LOG_DEBUG("generate %u of %u bytes", pool->generated_chunks, pool->max_chunks);
 		}
 
 		/* if chunks exist in generated stack, place them in available stack */
@@ -400,7 +404,7 @@ status_t _memory_pool_generate_chunk(
 		free(newChunk);
 		return err;
 	}
-	pool->generated_bytes += pool->chunk_size;
+	pool->generated_chunks += 1;
 
 	return NO_ERROR;
 }

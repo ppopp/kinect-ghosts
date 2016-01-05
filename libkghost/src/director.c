@@ -6,8 +6,8 @@
 #include <string.h>
 
 typedef struct loop_s {
-	vector_handle_t videos;
-	vector_handle_t depths;
+	vector_handle_t video_addresses;
+	vector_handle_t depth_addresses;
 	vector_handle_t cutoffs;
 	vector_handle_t frame_ids;
 	size_t next_frame;
@@ -71,7 +71,7 @@ status_t director_create(
 		return status;
 	}
 
-	status = vector_create(32, sizeof(loop_t), &(p_director->loops));
+	status = vector_create(32, sizeof(loop_t*), &(p_director->loops));
 	if (NO_ERROR != status) {
 		director_release(p_director);
 		return status;
@@ -100,7 +100,7 @@ void director_release(director_handle_t handle) {
 	
 	vector_count(handle->loops, &count);
 	for (i = 0; i < count; i++) {
-		status = vector_element(handle->loops, i, (void**)&p_loop);
+		status = vector_element_copy(handle->loops, i, (void**)&p_loop);
 		if (NO_ERROR != status) {
 			_loop_release(p_loop);
 		}
@@ -124,7 +124,7 @@ status_t director_playback_layers(
 	size_t   end_layer   = 0;
 	size_t   loop_index = 0;
 	size_t   layer_index = 0;
-	loop_t*  p_loop = NULL;
+	loop_t   *p_loop;
 
 	/* TODO: add any needed playback logic */
 	if ((NULL == handle) || (NULL == p_layers)) {
@@ -149,30 +149,31 @@ status_t director_playback_layers(
 	/* assign layers to structure */
 	for (loop_index = start_layer; loop_index < end_layer; loop_index++)
 	{
-		status = vector_element(handle->loops, loop_index, (void**)&p_loop);
+		status = vector_element_copy(handle->loops, loop_index, (void*)&p_loop);
 		if (NO_ERROR != status) {
 			return status;
 		}
 
 		/* copy data pointers to output structure */
-		status = vector_element(
-			p_loop->videos, 
-			p_loop->next_frame, 
-			(void**)&(p_layers->video_layers[layer_index]));
+		/* TODO: fix vector access */
+		status = vector_element_copy(
+			p_loop->video_addresses,
+			p_loop->next_frame,
+			(void*)&(p_layers->video_layers[layer_index]));
 		if (NO_ERROR != status) {
 			return status;
 		}
-		status = vector_element(
-			p_loop->depths, 
-			p_loop->next_frame, 
-			(void**)&(p_layers->depth_layers[layer_index]));
+		status = vector_element_copy(
+			p_loop->depth_addresses,
+			p_loop->next_frame,
+			(void*)&(p_layers->depth_layers[layer_index]));
 		if (NO_ERROR != status) {
 			return status;
 		}
-		status = vector_element(
-			p_loop->cutoffs, 
-			p_loop->next_frame, 
-			(void**)&(p_layers->depth_cutoffs[layer_index]));
+		status = vector_element_copy(
+			p_loop->cutoffs,
+			p_loop->next_frame,
+			(void*)&(p_layers->depth_cutoffs[layer_index]));
 		if (NO_ERROR != status) {
 			return status;
 		}
@@ -272,12 +273,12 @@ status_t _loop_create(loop_t** pp_loop) {
 	p_loop->frame_count = 0;
 	p_loop->next_frame = 0;
 
-	status = vector_create(128, sizeof(void*), &(p_loop->videos));
+	status = vector_create(128, sizeof(void*), &(p_loop->video_addresses));
 	if (NO_ERROR != status) {
 		_loop_release(p_loop);
 		return status;
 	}
-	status = vector_create(128, sizeof(void*), &(p_loop->depths));
+	status = vector_create(128, sizeof(void*), &(p_loop->depth_addresses));
 	if (NO_ERROR != status) {
 		_loop_release(p_loop);
 		return status;
@@ -302,8 +303,8 @@ void _loop_release(loop_t* p_loop) {
 		return;
 	}
 
-	vector_release(p_loop->videos);
-	vector_release(p_loop->depths);
+	vector_release(p_loop->video_addresses);
+	vector_release(p_loop->depth_addresses);
 	vector_release(p_loop->frame_ids);
 	vector_release(p_loop->cutoffs);
 	free(p_loop);
@@ -316,7 +317,7 @@ status_t _director_handle_new_frame(
 	status_t    status     = NO_ERROR;
 	void*       depth      = NULL;
 	void*       video      = NULL;
-	float       cutoff     = 0.0f;
+	float       *p_cutoff  = NULL;
 	loop_t*     p_loop     = NULL;
 	timestamp_t timestamp;
 
@@ -327,7 +328,7 @@ status_t _director_handle_new_frame(
 		frame_id,
 		&video,
 		&timestamp);
-	if (NO_ERROR == status) {
+	if (NO_ERROR != status) {
 		return status;
 	}
 	status = frame_store_depth_frame(
@@ -335,29 +336,29 @@ status_t _director_handle_new_frame(
 		frame_id,
 		&depth,
 		&timestamp);
-	if (NO_ERROR == status) {
+	if (NO_ERROR != status) {
 		return status;
 	}
 	status = frame_store_meta_frame(
 		p_director->frame_store,
 		frame_id,
-		(void*)&cutoff,
+		(void*)&p_cutoff,
 		&timestamp);
-	if (NO_ERROR == status) {
-		return status;
-	}
-
-	status = vector_append(p_loop->videos, &video);
 	if (NO_ERROR != status) {
 		return status;
 	}
 
-	status = vector_append(p_loop->depths, &depth);
+	status = vector_append(p_loop->video_addresses, &video);
 	if (NO_ERROR != status) {
 		return status;
 	}
 
-	status = vector_append(p_loop->cutoffs, &cutoff);
+	status = vector_append(p_loop->depth_addresses, &depth);
+	if (NO_ERROR != status) {
+		return status;
+	}
+
+	status = vector_append(p_loop->cutoffs, (void*)p_cutoff);
 	if (NO_ERROR != status) {
 		return status;
 	}
@@ -370,10 +371,10 @@ status_t _director_handle_new_frame(
 	p_loop->frame_count += 1;
 	if (p_loop->frame_count > 100) {
 		status = _director_handle_new_loop(p_director, p_loop);
+        p_director->p_current_loop = NULL;
+        status = _loop_create(&(p_director->p_current_loop));
 	}
-
-	p_director->p_current_loop = NULL;
-	status = _loop_create(&(p_director->p_current_loop));
+	
 	return status;
 }
 
@@ -381,7 +382,7 @@ status_t _director_handle_new_loop(director_t* p_director, loop_t* p_loop) {
 	status_t status = NO_ERROR;
 	/* TODO: do something with the loop (post processing) */
 	if (p_loop->frame_count > 0) {
-		status = vector_append(p_director->loops, (void**)&p_loop);
+		status = vector_append(p_director->loops, (void*)&p_loop);
 		if (NO_ERROR != status) {
 			return status;
 		}

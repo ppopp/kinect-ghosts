@@ -139,7 +139,7 @@ void frame_store_release(frame_store_handle_t handle) {
 	status = vector_count(handle->clips, &count);
 	if (NO_ERROR == status) {
 		for (index = 0; index < count; index++) {
-			status = vector_element(handle->clips, index, (void**)&p_clip);
+			status = vector_element_address(handle->clips, index, (void**)&p_clip);
 			if (NO_ERROR == status) {
 				_clip_release(*p_clip, handle->memory_pool);
 			}
@@ -338,11 +338,11 @@ status_t frame_store_remove_frame(
 		return ERR_NULL_POINTER;
 	}
 
-	status = vector_element(handle->clips, clip_index, (void**)&p_clip);
+	status = vector_element_address(handle->clips, clip_index, (void**)&p_clip);
 	if (NO_ERROR != status) {
 		return status;
 	}
-	status = vector_element((*p_clip)->frames, frame_index, (void**)&p_frame);
+	status = vector_element_address((*p_clip)->frames, frame_index, (void**)&p_frame);
 	if (NO_ERROR != status) {
 		return status;
 	}
@@ -426,7 +426,7 @@ status_t _frame_store_clip_frame(
 		return err;
 	}
 	
-	err = vector_element(clip->frames, frame_index, (void**)&p_frame_address);
+	err = vector_element_address(clip->frames, frame_index, (void**)&p_frame_address);
 	if (NO_ERROR != err) {
 		return err;
 	}
@@ -452,7 +452,7 @@ status_t _frame_store_clip(
 		return ERR_NULL_POINTER;
 	}
 
-	err = vector_element(handle->clips, index, (void**)&p_vector_handle);
+	err = vector_element_address(handle->clips, index, (void**)&p_vector_handle);
 	if (NO_ERROR == err) {
 		*p_handle = *p_vector_handle;
 	}
@@ -556,9 +556,10 @@ typedef struct frame_store_s {
 	size_t depth_offset;
 	size_t meta_offset;
 	size_t timestamp_offset;
-	char* current_frame;
+	unsigned char* current_frame;
 	size_t frame_size;
 	size_t current_frame_stored_size;
+	size_t frame_count;
 	memory_pool_handle_t memory_pool;
 } frame_store_t;
 
@@ -573,6 +574,12 @@ static status_t _frame_store_capture_data(
 
 static status_t _frame_store_new_frame(frame_store_handle_t handle);
 static status_t _frame_store_clear_current_frame(frame_store_handle_t handle);
+static status_t _frame_store_sub_frame(
+	frame_store_handle_t handle,
+	frame_id_t frame_id,
+	size_t data_offset,
+	void** p_data,
+	timestamp_t* p_timestamp);
 
 status_t frame_store_create(
 	size_t video_bytes,
@@ -596,6 +603,7 @@ status_t frame_store_create(
 
 	/* hopefuly you can just copy these over without some sort of copy
 	 * function to get dynamically allocated data */
+	p_frame_store->frame_count = 0;
 	p_frame_store->video_bytes = video_bytes;
 	p_frame_store->depth_bytes = depth_bytes;
 	p_frame_store->depth_offset = video_bytes;
@@ -617,7 +625,7 @@ status_t frame_store_create(
 		return err;
 	}
 
-	err = vector_create(32, sizeof(void*), &p_frame_store->frames);
+	err = vector_create(32, sizeof(unsigned char*), &p_frame_store->frames);
 	if (NO_ERROR != err) {
 		frame_store_release(p_frame_store);
 		return err;
@@ -645,7 +653,7 @@ void frame_store_release(frame_store_handle_t handle) {
 	status = vector_count(handle->frames, &count);
 	if (NO_ERROR == status) {
 		for (index = 0; index < count; index++) {
-			status = vector_element(handle->frames, index, (void**)&frame);
+			status = vector_element_address(handle->frames, index, (void**)&frame);
 			if (NO_ERROR == status) {
 				status = memory_pool_unclaim(handle->memory_pool, frame);
 			}
@@ -660,16 +668,38 @@ void frame_store_release(frame_store_handle_t handle) {
 
 
 status_t frame_store_frame_count(frame_store_handle_t handle, size_t* p_count) {
-	status_t status = NO_ERROR;
-
 	if (NULL == handle) {
 		return ERR_NULL_POINTER;
 	}
 
-	status = vector_count(handle->frames, p_count);
-	if (NO_ERROR != status) {
-		return status;
+	*p_count = handle->frame_count;
+
+	return NO_ERROR;
+}
+
+status_t _frame_store_sub_frame(
+	frame_store_handle_t handle,
+	frame_id_t frame_id,
+	size_t data_offset,
+	void** p_data,
+	timestamp_t* p_timestamp)
+{
+	status_t err = NO_ERROR;
+	unsigned char** p_frame_data = NULL;
+	unsigned char* frame_data = NULL;
+
+	if ((NULL == handle) || (NULL == p_data) || (NULL == p_timestamp)) {
+		return ERR_NULL_POINTER;
 	}
+
+	err = vector_element_address(handle->frames, frame_id, (void**)&p_frame_data);
+	if (NO_ERROR != err) {
+		return err;
+	}
+	frame_data = *p_frame_data;
+
+	*p_data = (void*)&(frame_data[data_offset]);
+	*p_timestamp = *((timestamp_t*)&(frame_data[handle->timestamp_offset]));
 
 	return NO_ERROR;
 }
@@ -680,22 +710,15 @@ status_t frame_store_video_frame(
 	void** p_data,
 	timestamp_t* p_timestamp)
 {
-	status_t err = NO_ERROR;
-	unsigned char* frame_data = NULL;
-
-	if ((NULL == handle) || (NULL == p_data) || (NULL == p_timestamp)) {
+	if (NULL == handle) {
 		return ERR_NULL_POINTER;
 	}
-
-	err = vector_element(handle->frames, frame_id, (void**)&frame_data);
-	if (NO_ERROR != err) {
-		return err;
-	}
-
-	*p_data = (void*)&(frame_data[handle->video_offset]);
-	*p_timestamp = *((timestamp_t*)&(frame_data[handle->timestamp_offset]));
-
-	return NO_ERROR;
+	return _frame_store_sub_frame(
+		handle, 
+		frame_id, 
+		handle->video_offset, 
+		p_data, 
+		p_timestamp);
 }
 
 status_t frame_store_depth_frame(
@@ -704,22 +727,15 @@ status_t frame_store_depth_frame(
 	void** p_data,
 	timestamp_t* p_timestamp)
 {
-	status_t err = NO_ERROR;
-	char* frame_data = NULL;
-
-	if ((NULL == handle) || (NULL == p_data) || (NULL == p_timestamp)) {
+	if (NULL == handle) {
 		return ERR_NULL_POINTER;
 	}
-
-	err = vector_element(handle->frames, frame_id, (void**)&frame_data);
-	if (NO_ERROR != err) {
-		return err;
-	}
-
-	*p_data = (void*)&(frame_data[handle->depth_offset]);
-	*p_timestamp = *((timestamp_t*)&(frame_data[handle->timestamp_offset]));
-
-	return NO_ERROR;
+	return _frame_store_sub_frame(
+		handle, 
+		frame_id, 
+		handle->depth_offset, 
+		p_data, 
+		p_timestamp);
 }
 
 status_t frame_store_meta_frame(
@@ -728,22 +744,15 @@ status_t frame_store_meta_frame(
 	void** p_data,
 	timestamp_t* p_timestamp)
 {
-	status_t err = NO_ERROR;
-	char* frame_data = NULL;
-
-	if ((NULL == handle) || (NULL == p_data) || (NULL == p_timestamp)) {
+	if (NULL == handle) {
 		return ERR_NULL_POINTER;
 	}
-
-	err = vector_element(handle->frames, frame_id, (void**)&frame_data);
-	if (NO_ERROR != err) {
-		return err;
-	}
-
-	*p_data = (void*)&(frame_data[handle->meta_offset]);
-	*p_timestamp = *((timestamp_t*)&(frame_data[handle->timestamp_offset]));
-
-	return NO_ERROR;
+	return _frame_store_sub_frame(
+		handle, 
+		frame_id, 
+		handle->meta_offset, 
+		p_data, 
+		p_timestamp);
 }
 
 status_t frame_store_capture_video(
@@ -831,10 +840,11 @@ status_t frame_store_remove_frame(
 		return ERR_NULL_POINTER;
 	}
 
-	status = vector_element(handle->frames, frame_id, (void**)&p_frame);
+	status = vector_element_address(handle->frames, frame_id, (void**)&p_frame);
 	if (NO_ERROR != status) {
 		return status;
 	}
+	handle->frame_count--;
 
 	status = memory_pool_unclaim(handle->memory_pool, (void*)*p_frame);
 	if (NO_ERROR != status) {
@@ -866,7 +876,8 @@ status_t _frame_store_capture_data(
 	*p_frame_id = invalid_frame_id;
 	current_timestamp = 
 		*((timestamp_t*)&(handle->current_frame[handle->timestamp_offset]));
-	if (timestamp > current_timestamp) {
+	//if (timestamp > current_timestamp) {
+    if (timestamp != current_timestamp) {
 		/* copy data and wait for other half */
 		memcpy(
 			&(handle->current_frame[handle->timestamp_offset]),
@@ -876,7 +887,7 @@ status_t _frame_store_capture_data(
 			&(handle->current_frame[frame_data_offset]),
 			data,
 			data_size);
-		handle->current_frame_stored_size = data_size;
+		handle->current_frame_stored_size = data_size + sizeof(timestamp_t);
 	}
 	else if (timestamp == current_timestamp) {
 		/* copy data and store */
@@ -889,12 +900,17 @@ status_t _frame_store_capture_data(
 		if (handle->current_frame_stored_size == handle->frame_size) {
 			/* we've collected all the necessary data, so time to
 			 * store the frame */
+            err = vector_count(handle->frames, p_frame_id);
+			if (NO_ERROR != err) {
+				return err;
+			}
 			err = vector_append(
 				handle->frames, 
 				(void*)&(handle->current_frame));
 			if (NO_ERROR != err) {
 				return err;
 			}
+			handle->frame_count++;
 			err = _frame_store_new_frame(handle);
 			if (NO_ERROR != err) {
 				return err;
@@ -903,16 +919,14 @@ status_t _frame_store_capture_data(
 				&(handle->current_frame[handle->timestamp_offset]),
 				&timestamp,
 				sizeof(timestamp_t));
-			err = vector_count(handle->frames, p_frame_id);
-			if (NO_ERROR != err) {
-				return err;
-			}
 		}
 	}
+    /*
 	else {
 		memset(handle->current_frame, 0, handle->frame_size);
 		return ERR_INVALID_TIMESTAMP;
 	}
+    */
 	return NO_ERROR;
 }
 

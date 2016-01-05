@@ -1,13 +1,13 @@
 #include "glut_main.h"
-#include "frame_store.h"
 #include "timer.h"
-#include "median_filter.h"
-#include "motion_detector.h"
 
 #include "log.h"
 #include "command.h"
 #include "common.h"
 
+#include "median_filter.h"
+#include "motion_detector.h"
+#include "director.h"
 #include "kinect_manager.h"
 #include "display_manager.h"
 
@@ -83,16 +83,6 @@ static const unsigned char _newline = 10;
 static const unsigned char _carriage_return = 13;
 static const unsigned char _spacebar = (unsigned char)' ';
 
-/* collect 5 seconds of video */
-static const size_t _max_recorded_bytes = 640 * 480 * 4 * 30 * 5 * 4;
-
-typedef struct _layer_s {
-	float depth;
-	double time;
-	double next_time;
-	size_t frame;
-} layer_t;
-
 typedef struct _stream_properties_s {
 	size_t width;
 	size_t height;
@@ -111,9 +101,7 @@ typedef struct _gl_ghosts {
 	size_t commandPos;
 	commander cmdr;
 
-	frame_store_handle_t frame_store;
-	bool_t do_record;
-	layer_t layers[TEXTURE_CAPACITY - 1];
+	director_handle_t director;
 	timer_handle_t playback_timer;
 
 	kinect_manager_handle_t kinect_manager;
@@ -121,9 +109,6 @@ typedef struct _gl_ghosts {
 	stream_properties_t video_stream_properties;
 	stream_properties_t depth_stream_properties;
 	motion_detector_handle_t motion_detector;
-
-
-	
 } gl_ghosts; 
 
 
@@ -162,24 +147,6 @@ static void _depth_cb(
 /* command callback */
 static int _command_set(const char* cmd, void* data);
 
-/* recording control */
-static int _start_recording(gl_ghosts* p_gl_ghosts);
-static int _stop_recording(gl_ghosts* p_gl_ghosts);
-
-/* layer stuff */
-static status_t _init_layer(
-	float depth, 
-	frame_store_handle_t frame_store, 
-	size_t frame_store_clip_index, 
-	layer_t* p_layer);
-
-static status_t _layer_get_next_frame(
-		layer_t* p_layer,
-		double time_delta,
-		frame_store_handle_t frame_store,
-		size_t frame_store_clip_index,
-		void** p_video_buffer,
-		void** p_depth_buffer);
 
 int main(int argc, const char* argv[]) {
 	gl_ghosts glGhosts;
@@ -210,7 +177,6 @@ int main(int argc, const char* argv[]) {
 
 int _init(void* data) {
 	status_t   error       = NO_ERROR;
-	size_t     index       = 0;
 	gl_ghosts* p_gl_ghosts = (gl_ghosts*)data;
 
 	/* initialize gl_ghosts structure */
@@ -222,9 +188,8 @@ int _init(void* data) {
 	p_gl_ghosts->cmdr = command_create();
 	command_set_callback(p_gl_ghosts->cmdr, _command_set);
 
-	p_gl_ghosts->frame_store = NULL;
+	p_gl_ghosts->director= NULL;
 	p_gl_ghosts->playback_timer = NULL;
-	p_gl_ghosts->do_record = FALSE;
 
 	/* initialize kinect device and start callbacks */
 	/* TODO: set appropriate callbacks */
@@ -329,26 +294,15 @@ int _init(void* data) {
 
 
 	/* initialize kinect recording */
-	error = frame_store_create(
+	error = director_create(
+		TEXTURE_CAPACITY - 1,
+		1024l * 1024l * 1024l * 2l, // 2 GB
 		p_gl_ghosts->video_stream_properties.bytes_per_frame,
 		p_gl_ghosts->depth_stream_properties.bytes_per_frame,
-		_max_recorded_bytes,
-		&(p_gl_ghosts->frame_store));
+		&p_gl_ghosts->director);
 	if (NO_ERROR != error) {
-		LOG_ERROR("failed to init frame_store");
+		LOG_ERROR("failed to init director");
 		return error;
-	}
-	error = frame_store_mark_clip_boundary(p_gl_ghosts->frame_store);
-	if (NO_ERROR != error) {
-		LOG_ERROR("failed to init frame_store");
-		return error;
-	}
-
-	/* initialize display layers */
-	for (index = 0; index < (TEXTURE_CAPACITY - 1); index++) {
-		p_gl_ghosts->layers[index].depth = 0.0f;
-		p_gl_ghosts->layers[index].time = 0.0;
-		p_gl_ghosts->layers[index].frame = 0;
 	}
 
 	error = timer_create(&(p_gl_ghosts->playback_timer));
@@ -398,12 +352,11 @@ void _display(void* data) {
 	 */
 	status_t   error        = NO_ERROR;
 	gl_ghosts* p_gl_ghosts  = (gl_ghosts*)data;
-	size_t     num_frames   = 0;
-	size_t     num_clips    = 0;
 	size_t     index        = 0;
 	void*      video_buffer = NULL;
 	void*      depth_buffer = NULL;
 	double     delta        = 0.0;
+	director_frame_layers_t layers;
 
 	/* This was added to speed things up by skipping frames. 
 	 * TODO: is there a better way to make sure that playback does not slow
@@ -418,6 +371,7 @@ void _display(void* data) {
 	}
 
 	/* get time since last callback */
+	/* TODO: what does director expect?  A delta? */
 	error = timer_current(p_gl_ghosts->playback_timer, &delta);
 	if (0 != error) {
 		LOG_ERROR("error getting playback time");
@@ -429,9 +383,12 @@ void _display(void* data) {
 		return; 
 	}
 
-	error = frame_store_clip_count(p_gl_ghosts->frame_store, &num_clips);
+	error = director_playback_layers(
+		p_gl_ghosts->director,
+		delta,
+		&layers);
 	if (0 != error) {
-		LOG_ERROR("error getting clip count");
+		LOG_ERROR("error getting playback layers");
 		return; 
 	}
 
@@ -443,40 +400,16 @@ void _display(void* data) {
 	}
 
 	/* loop through clips adding image data to opengl */
-	for (index = 0; index < num_clips; index++) {
-		/* get video and depth information from frame_store */
-		error = frame_store_frame_count(p_gl_ghosts->frame_store, index, &num_frames);
-		if (0 != error) {
-			LOG_ERROR("error getting frame count");
-			num_frames = 0;
-		}
-
-		if (0 == num_frames) {
-			LOG_WARNING("clip with zero frames");
-		}
-
-		if (num_frames > 0) {
-			video_buffer = NULL;
-			depth_buffer = NULL;
-			error = _layer_get_next_frame(
-				&(p_gl_ghosts->layers[index]),
-				delta,
-				p_gl_ghosts->frame_store,
-				index,
-				&video_buffer,
-				&depth_buffer);
-			if (0 != error) {
-				LOG_ERROR("error getting frame");
-				num_frames = 0;
-			}
-			error = display_manager_set_frame_layer(
-				p_gl_ghosts->display_manager,
-				p_gl_ghosts->layers[index].depth,
-				video_buffer,
-				depth_buffer);
-			if (NO_ERROR != error) {
-				LOG_ERROR("error setting frame layer");
-			}
+	for (index = 0; index < layers.layer_count; index++) {
+		video_buffer = NULL;
+		depth_buffer = NULL;
+		error = display_manager_set_frame_layer(
+			p_gl_ghosts->display_manager,
+			layers.depth_cutoffs[index],
+			layers.video_layers[index],
+			layers.depth_layers[index]);
+		if (NO_ERROR != error) {
+			LOG_ERROR("error setting frame layer");
 		}
 	}
 	/* display live data */
@@ -542,7 +475,6 @@ void _idle(void* data) {
 
 void _keyboard(unsigned char key, int mouseX, int mouseY, void* data) {
 	gl_ghosts* p_gl_ghosts = (gl_ghosts*)data;
-	status_t status = NO_ERROR;
 
 	if (p_gl_ghosts == NULL) {
 		LOG_WARNING("null pointer");
@@ -575,6 +507,7 @@ void _keyboard(unsigned char key, int mouseX, int mouseY, void* data) {
 		p_gl_ghosts->commandPos = 0;
 		memset(p_gl_ghosts->command, 0, MAX_COMMAND_LENGTH);
 	}
+	/*
 	else if ((key == _spacebar) && (p_gl_ghosts->commandPos == 0)) {
 		if (p_gl_ghosts->do_record) {
 			status = _stop_recording(p_gl_ghosts);
@@ -589,6 +522,7 @@ void _keyboard(unsigned char key, int mouseX, int mouseY, void* data) {
 			}
 		}
 	}
+	*/
 	else {
 		(p_gl_ghosts->command)[p_gl_ghosts->commandPos] = (char)key;
 		p_gl_ghosts->commandPos++;
@@ -658,6 +592,7 @@ void _video_cb(
 		return;
 	}
 
+	/*
 	if (TRUE == p_ghosts->do_record) {
 		error = frame_store_capture_video(p_ghosts->frame_store, video_data, timestamp);
 		if (NO_ERROR != error) {
@@ -665,6 +600,14 @@ void _video_cb(
 			LOG_ERROR("timestamp %f", timestamp);
 			return;
 		}
+	}
+	*/
+
+	error = director_capture_video(p_ghosts->director, video_data, timestamp);
+	if (NO_ERROR != error) {
+		LOG_ERROR("error capturing video frame[%i](%s)", error, error_string(error));
+		LOG_ERROR("timestamp %f", timestamp);
+		return;
 	}
 }
 
@@ -687,6 +630,7 @@ void _depth_cb(
 	}
 
 
+	/*
 	if (p_ghosts->do_record) {
 		error = frame_store_capture_depth(p_ghosts->frame_store, depth_data, timestamp);
 		if (NO_ERROR != error) {
@@ -695,7 +639,20 @@ void _depth_cb(
 			return;
 		}
 	}
+	*/
+	error = director_capture_depth(
+		p_ghosts->director, 
+		depth_data, 
+		p_ghosts->depth_cutoff,
+		timestamp);
+	if (NO_ERROR != error) {
+		LOG_ERROR("error capturing depth frame [%i](%s)", error, error_string(error));
+		LOG_ERROR("timestamp %f", timestamp);
+		return;
+	}
 
+	/* TODO: move motion detector where needed.  use this value to determine
+	 * cutoff values.
 	cutoff = (short)((unsigned)(p_ghosts->depth_cutoff * 65536) / p_ghosts->depth_scale);
 	error = motion_detector_detect(
 		p_ghosts->motion_detector,
@@ -711,6 +668,7 @@ void _depth_cb(
 	}
 
 	fprintf(stdout, "c: %u\tp: %f\tm:%f\n", cutoff, presence, motion);
+	*/
 }
 
 void _cleanup(void* data) {
@@ -722,7 +680,7 @@ void _cleanup(void* data) {
 	display_manager_destroy(p_gl_ghosts->display_manager);
 	kinect_manager_destroy(p_gl_ghosts->kinect_manager);
 	command_destroy(p_gl_ghosts->cmdr);
-	frame_store_release(p_gl_ghosts->frame_store);
+	director_release(p_gl_ghosts->director);
 	timer_release(p_gl_ghosts->playback_timer);
 	p_gl_ghosts->playback_timer = NULL;
 
@@ -752,38 +710,6 @@ int _command_set(const char* cmd, void* data) {
 	return COMMAND_CONTINUE;
 }
 
-
-int _start_recording(gl_ghosts* p_gl_ghosts) {
-	status_t status    = NO_ERROR;
-	size_t   num_clips = 0;
-
-	if(TRUE == p_gl_ghosts->do_record) {
-		LOG_DEBUG("attempt to start recording when already recording");
-	}
-
-	/* check to make sure we can handle a new clip */
-	status = frame_store_clip_count(p_gl_ghosts->frame_store, &num_clips);
-	if (NO_ERROR != status) {
-		LOG_ERROR("failed to get clip count");
-		return status;
-	}
-
-	if (num_clips >= (TEXTURE_CAPACITY - 1)) {
-		LOG_WARNING("cannot create any more clips");
-		return ERR_FULL;
-	}
-
-	status = kinect_manager_reset_timestamp(p_gl_ghosts->kinect_manager);
-	if (NO_ERROR != status) {
-		LOG_ERROR("failed to reset record timer");
-		return status;
-	}
-
-	p_gl_ghosts->do_record = TRUE;
-
-	return NO_ERROR;
-}
-
 static int _compare_pixel_uint16(const void* p_left, const void* p_right) {
 	/* TODO: going to hack this up, but really need this to be contigent on the
 	 * number of bits in the depth frame's pixels */
@@ -800,6 +726,7 @@ static int _compare_pixel_uint16(const void* p_left, const void* p_right) {
 	return 0;
 }
 
+/*
 static void _median_filter_last(gl_ghosts* p_gl_ghosts) {
 	median_filter_handle_t med_filt = NULL;
 	status_t status = NO_ERROR;
@@ -810,12 +737,12 @@ static void _median_filter_last(gl_ghosts* p_gl_ghosts) {
 	size_t clip_to_modify = 0;
 	size_t frame = 0;
 
-	/* set median filter shape */
+	// set median filter shape 
 	shape.x = 3;
 	shape.y = 3;
 	shape.z = 3;
 
-	/* determine which clip we'll be modifying */
+	// determine which clip we'll be modifying 
 	status = frame_store_clip_count(p_gl_ghosts->frame_store, &clip_count);
 	if (NO_ERROR != status) {
 		LOG_ERROR("shit");
@@ -826,7 +753,7 @@ static void _median_filter_last(gl_ghosts* p_gl_ghosts) {
 		return;
 	}
 
-	/* get number of frames in clip */
+	// get number of frames in clip 
 	clip_to_modify = clip_count - 1;
 	status = frame_store_frame_count(
 		p_gl_ghosts->frame_store,
@@ -841,7 +768,7 @@ static void _median_filter_last(gl_ghosts* p_gl_ghosts) {
 		return;
 	}
 
-	/* set median filter input spec */
+	// set median filter input spec
 	input_spec.element_size = 
 		p_gl_ghosts->depth_stream_properties.bits_per_pixel / CHAR_BIT;
 	input_spec.channel_count = 1;
@@ -886,176 +813,5 @@ static void _median_filter_last(gl_ghosts* p_gl_ghosts) {
 	}
 	median_filter_release(med_filt);
 }
-
-int _stop_recording(gl_ghosts* p_gl_ghosts) {
-	status_t status    = NO_ERROR;
-	size_t   count     = 0;
-	size_t   last_clip = 0;
-
-	/* check that we were recording in the first place */
-	if (FALSE == p_gl_ghosts->do_record) {
-		LOG_DEBUG("attemp to stop recording when not recording");
-		return NO_ERROR;
-	}
-
-	/* set flag to stop recording */
-	p_gl_ghosts->do_record = FALSE;
-
-	/* start new clip */
-	status = frame_store_mark_clip_boundary(p_gl_ghosts->frame_store);
-	if (NO_ERROR != status) {
-		LOG_ERROR("failed to start new clip");
-		return status;
-	}
-
-
-	/* TODO: HACK:
-	 * testing out median filtering of the depth channel here.  All the stuff
-	 * can be removed and should be integrated in a better place */
-	//_median_filter_last(p_gl_ghosts);
-	/** END TODO: END HACK */
-
-	/* initialize new layer for display */
-	status = frame_store_clip_count(p_gl_ghosts->frame_store, &count);
-	if (NO_ERROR != status) {
-		LOG_ERROR("failed to get clip count");
-		return status;
-	}
-	if (count >= (TEXTURE_CAPACITY - 1)) {
-		LOG_WARNING("cannot create any more clips");
-		return NO_ERROR;
-	}
-
-	last_clip = count - 1;
-	status = _init_layer(
-		p_gl_ghosts->depth_cutoff,
-		p_gl_ghosts->frame_store,
-		last_clip,
-		&(p_gl_ghosts->layers[last_clip]));
-	if (NO_ERROR != status) {
-		LOG_ERROR("failed to init layer");
-		return status;
-	}
-
-	return NO_ERROR;
-}
-
-status_t _init_layer(
-	float depth, 
-	frame_store_handle_t frame_store, 
-	size_t frame_store_clip_index, 
-	layer_t* p_layer)
-{
-	status_t status  = NO_ERROR;
-	void*    p_dummy = NULL;
-
-	p_layer->depth = depth;
-	p_layer->frame = 0;
-	/* get timestamp of first frame */
-	status = frame_store_video_frame(
-		frame_store,
-		frame_store_clip_index,
-		0,
-		&p_dummy,
-		&(p_layer->time));
-
-	if (NO_ERROR != status) {
-		LOG_ERROR("failed to get first timestamp");
-		return status;
-	}
-	/* get next timestamp */
-	status = frame_store_video_frame(
-		frame_store,
-		frame_store_clip_index,
-		1,
-		&p_dummy,
-		&(p_layer->next_time));
-
-	if (NO_ERROR != status) {
-		LOG_ERROR("failed to get next timestamp");
-		return status;
-	}
-
-	return NO_ERROR;
-}
-
-status_t _layer_get_next_frame(
-		layer_t* p_layer,
-		double time_delta,
-		frame_store_handle_t frame_store,
-		size_t frame_store_clip_index,
-		void** p_video_buffer,
-		void** p_depth_buffer)
-{
-	status_t error = NO_ERROR;
-	double   timestamp = 0;
-	size_t   count = 0;
-	size_t   next_frame = 0;
-	void*    dummy = NULL;
-
-	/* determine index of next frame */
-	p_layer->time += time_delta;
-	if (p_layer->time >= p_layer->next_time) {
-		/* increment frame */
-		p_layer->frame += 1;
-		error = frame_store_frame_count(frame_store, frame_store_clip_index, &count);
-		if (0 != error) {
-			LOG_ERROR("error getting frames");
-			return error;
-		}
-		/* check for rollover of clip and loop if necessary */
-		if (p_layer->frame >= count) {
-			p_layer->frame = 0;
-			error = frame_store_video_frame(
-				frame_store, 
-				frame_store_clip_index,
-				0,
-				&dummy,
-				&(p_layer->time));
-			if (0 != error) {
-				LOG_ERROR("error getting frames");
-				return error;
-			}
-		}
-		/* get timestamp of next frame */
-		next_frame = p_layer->frame + 1;
-		if (next_frame >= count) {
-			next_frame = 0;
-		}
-		error = frame_store_video_frame(
-			frame_store, 
-			frame_store_clip_index,
-			next_frame,
-			&dummy,
-			&(p_layer->next_time));
-		if (0 != error) {
-			LOG_ERROR("error getting frames");
-			return error;
-		}
-	}
-
-	error = frame_store_video_frame(
-		frame_store,
-		frame_store_clip_index,
-		p_layer->frame,
-		p_video_buffer,
-		&timestamp);
-	if (0 != error) {
-		LOG_ERROR("error getting frames");
-		return error;
-	}
-	error = frame_store_depth_frame(
-		frame_store,
-		frame_store_clip_index,
-		p_layer->frame,
-		p_depth_buffer,
-		&timestamp);
-	if (0 != error) {
-		LOG_ERROR("error getting frames");
-		return error;
-	}
-
-	return NO_ERROR;
-}
-
+*/
 

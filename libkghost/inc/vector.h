@@ -26,7 +26,11 @@ extern "C" {
 	status_t vector_append(vector_handle_t handle, void* p_element);
 	status_t vector_pop(vector_handle_t handle);
 	status_t vector_clear(vector_handle_t handle);
-	status_t vector_element(
+	status_t vector_element_copy(
+		vector_handle_t handle, 
+		size_t index, 
+		void* p_element);
+	status_t vector_element_address(
 		vector_handle_t handle, 
 		size_t index, 
 		void** pp_element);
