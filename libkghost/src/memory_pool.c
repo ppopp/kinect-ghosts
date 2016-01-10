@@ -338,19 +338,15 @@ void* _memory_pool_thread(void* data) {
 				((chunkCount + pool->generated_chunks) > pool->max_chunks))
 			{
 				chunkCount--;
-				LOG_DEBUG("chunk count %u", chunkCount);
 			}
 
 			while ((chunkCount != 0) && (status == NO_ERROR)) {
-				LOG_DEBUG("chunks to generate %u", chunkCount);
 				status = _memory_pool_generate_chunk(pool, pool->generated);
 				chunkCount--;
 			}
 			if (NO_ERROR != status) {
 				pthread_exit(NULL);
 			}
-
-			LOG_DEBUG("generate %u of %u bytes", pool->generated_chunks, pool->max_chunks);
 		}
 
 		/* if chunks exist in generated stack, place them in available stack */

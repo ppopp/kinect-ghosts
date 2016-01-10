@@ -64,9 +64,13 @@ extern "C" {
 		size_t max_bytes, 
 		size_t bytes_per_video_frame,
 		size_t bytes_per_depth_frame,
+		size_t bytes_per_depth_pixel,
+		float depth_scale,
 		director_handle_t* p_handle);
 
 	void director_release(director_handle_t handle);
+
+	//TODO: get/set status_t director_set_*
 
 	status_t director_playback_layers(
 		director_handle_t handle, 

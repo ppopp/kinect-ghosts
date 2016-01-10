@@ -299,6 +299,8 @@ int _init(void* data) {
 		1024l * 1024l * 1024l * 2l, // 2 GB
 		p_gl_ghosts->video_stream_properties.bytes_per_frame,
 		p_gl_ghosts->depth_stream_properties.bytes_per_frame,
+		p_gl_ghosts->depth_stream_properties.bits_per_pixel / CHAR_BIT,
+		p_gl_ghosts->depth_scale,
 		&p_gl_ghosts->director);
 	if (NO_ERROR != error) {
 		LOG_ERROR("failed to init director");
@@ -333,6 +335,7 @@ int _init(void* data) {
 		LOG_ERROR("depth pixels not byte aligned");
 		return ERR_UNSUPPORTED_FORMAT;
 	}
+	/* TODO: remove motion detector */
 	error = motion_detector_create(
 		p_gl_ghosts->depth_stream_properties.bits_per_pixel / CHAR_BIT,
 		p_gl_ghosts->depth_stream_properties.width * p_gl_ghosts->depth_stream_properties.height,

@@ -59,7 +59,7 @@ TEST(VectorTest, AccessorsManipulators) {
 	ASSERT_EQ(err, NO_ERROR);
 	ASSERT_GT(capacity, (size_t)1);
 
-	err = vector_element(vector, 5, (void**)&p_element);
+	err = vector_element_address(vector, 5, (void**)&p_element);
 	ASSERT_EQ(err, NO_ERROR);
 	ASSERT_TRUE(NULL != p_element);
 	ASSERT_EQ(*p_element, (char)5);
@@ -67,7 +67,7 @@ TEST(VectorTest, AccessorsManipulators) {
 	err = vector_remove(vector, 5);
 	ASSERT_EQ(err, NO_ERROR);
 
-	err = vector_element(vector, 5, (void**)&p_element);
+	err = vector_element_address(vector, 5, (void**)&p_element);
 	ASSERT_EQ(err, NO_ERROR);
 	ASSERT_TRUE(NULL != p_element);
 	ASSERT_EQ(*p_element, (char)6);
