@@ -1,30 +1,0 @@
-Tlibkghost-test
-v7
-r0
-t393117894.727030
-cCheck dependencies
-cExternalBuildToolExecution libkghost-test
-
-N/usr/bin/make
-c000000004A11964700000000000556C0
-t1242666567
-s349888
-
-CCheck dependencies
-r0
-lSLF07#2@18"Check dependencies393117894#393117894#0(0"0(0#1#0"29836824280170608#0"0#
-
-CExternalBuildToolExecution libkghost-test
-s393117894.154700
-e393117894.726979
-r1
-xExternalBuildToolExecution
-xlibkghost-test
-ocd ../ && /usr/bin/make 
-omake[1]: Nothing to be done for `all'.
-orm -f bin/debug/64/testd
-og++   -framework OpenGL  -framework GLUT -arch x86_64  -L/lol/lib  -L..//lib/debug/64  obj/debug/64/test_vector.o obj/debug/64/gtest-all.o -lGLEW -lfreenect -lkghostd -o bin/debug/64/testd
-orm -f bin/release/64/test
-og++   -framework OpenGL  -framework GLUT -arch x86_64  -L/lol/lib  -L..//lib/release/64  obj/release/64/test_vector.o obj/release/64/gtest-all.o -lGLEW -lfreenect -lkghost -o bin/release/64/test
-lSLF07#2@23"Run external build tool393117894#393117894#0(499"cd ../ && /usr/bin/make make[1]: Nothing to be done for `all'.rm -f bin/debug/64/testdg++   -framework OpenGL  -framework GLUT -arch x86_64  -L/lol/lib  -L..//lib/debug/64  obj/debug/64/test_vector.o obj/debug/64/gtest-all.o -lGLEW -lfreenect -lkghostd -o bin/debug/64/testdrm -f bin/release/64/testg++   -framework OpenGL  -framework GLUT -arch x86_64  -L/lol/lib  -L..//lib/release/64  obj/release/64/test_vector.o obj/release/64/gtest-all.o -lGLEW -lfreenect -lkghost -o bin/release/64/test6(13@25"cd ../ && /usr/bin/make 393117894#0#25#0(1@0"0(13@39"make[1]: Nothing to be done for `all'.393117894#25#39#0(1@0"0(13@25"rm -f bin/debug/64/testd393117894#64#25#0(1@0"0(13@189"g++   -framework OpenGL  -framework GLUT -arch x86_64  -L/lol/lib  -L..//lib/debug/64  obj/debug/64/test_vector.o obj/debug/64/gtest-all.o -lGLEW -lfreenect -lkghostd -o bin/debug/64/testd393117894#89#189#0(1@0"0(13@26"rm -f bin/release/64/test393117894#278#26#0(1@0"0(13@195"g++   -framework OpenGL  -framework GLUT -arch x86_64  -L/lol/lib  -L..//lib/release/64  obj/release/64/test_vector.o obj/release/64/gtest-all.o -lGLEW -lfreenect -lkghost -o bin/release/64/test393117894#304#195#0(1@0"0(0#0#0"28429402151780452#113"    cd /Users/ppopp/projects/kinect-ghosts/libkghost/test/prj/xcode_3/../..    setenv ACTION     /usr/bin/make0#
-

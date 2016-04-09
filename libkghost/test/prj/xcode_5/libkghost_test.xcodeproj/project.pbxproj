@@ -1,0 +1,244 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 46;
+	objects = {
+
+/* Begin PBXFileReference section */
+		A1100A521AA417CF00BA3F51 /* src */ = {isa = PBXFileReference; lastKnownFileType = folder; name = src; path = ../../src; sourceTree = "<group>"; };
+		A19C0A4618B28CED00BF2FA8 /* test */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = test; sourceTree = "<group>"; };
+		A19C0A4918B28CED00BF2FA8 /* test */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = test; sourceTree = "<group>"; };
+		A1F67FF71AA41566002A05DB /* src */ = {isa = PBXFileReference; lastKnownFileType = folder; name = src; path = ../src; sourceTree = "<group>"; };
+		A1F67FF81AA41572002A05DB /* inc */ = {isa = PBXFileReference; lastKnownFileType = folder; path = inc; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		A19C0A2F18B28BF400BF2FA8 = {
+			isa = PBXGroup;
+			children = (
+				A1100A521AA417CF00BA3F51 /* src */,
+				A1FD72EA18B3234B00B46ACE /* libkghost */,
+				A19C0A4218B28CED00BF2FA8 /* bin */,
+			);
+			sourceTree = "<group>";
+		};
+		A19C0A4218B28CED00BF2FA8 /* bin */ = {
+			isa = PBXGroup;
+			children = (
+				A19C0A4318B28CED00BF2FA8 /* debug */,
+				A19C0A4718B28CED00BF2FA8 /* release */,
+			);
+			name = bin;
+			path = ../../bin;
+			sourceTree = "<group>";
+		};
+		A19C0A4318B28CED00BF2FA8 /* debug */ = {
+			isa = PBXGroup;
+			children = (
+				A19C0A4418B28CED00BF2FA8 /* 32 */,
+				A19C0A4518B28CED00BF2FA8 /* 64 */,
+			);
+			path = debug;
+			sourceTree = "<group>";
+		};
+		A19C0A4418B28CED00BF2FA8 /* 32 */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = 32;
+			sourceTree = "<group>";
+		};
+		A19C0A4518B28CED00BF2FA8 /* 64 */ = {
+			isa = PBXGroup;
+			children = (
+				A19C0A4618B28CED00BF2FA8 /* test */,
+			);
+			path = 64;
+			sourceTree = "<group>";
+		};
+		A19C0A4718B28CED00BF2FA8 /* release */ = {
+			isa = PBXGroup;
+			children = (
+				A19C0A4818B28CED00BF2FA8 /* 64 */,
+			);
+			path = release;
+			sourceTree = "<group>";
+		};
+		A19C0A4818B28CED00BF2FA8 /* 64 */ = {
+			isa = PBXGroup;
+			children = (
+				A19C0A4918B28CED00BF2FA8 /* test */,
+			);
+			path = 64;
+			sourceTree = "<group>";
+		};
+		A1FD72EA18B3234B00B46ACE /* libkghost */ = {
+			isa = PBXGroup;
+			children = (
+				A1F67FF81AA41572002A05DB /* inc */,
+				A1F67FF71AA41566002A05DB /* src */,
+			);
+			name = libkghost;
+			path = ../../../inc;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXLegacyTarget section */
+		A19C0A3418B28BF400BF2FA8 /* libkghost_test */ = {
+			isa = PBXLegacyTarget;
+			buildArgumentsString = "$(ACTION)";
+			buildConfigurationList = A19C0A3718B28BF400BF2FA8 /* Build configuration list for PBXLegacyTarget "libkghost_test" */;
+			buildPhases = (
+			);
+			buildToolPath = /usr/bin/make;
+			buildWorkingDirectory = ../../;
+			dependencies = (
+			);
+			name = libkghost_test;
+			passBuildSettingsInEnvironment = 0;
+			productName = libkghost_test;
+		};
+/* End PBXLegacyTarget section */
+
+/* Begin PBXProject section */
+		A19C0A3018B28BF400BF2FA8 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastUpgradeCheck = 0500;
+				ORGANIZATIONNAME = "Phillip Popp";
+			};
+			buildConfigurationList = A19C0A3318B28BF400BF2FA8 /* Build configuration list for PBXProject "libkghost_test" */;
+			compatibilityVersion = "Xcode 3.2";
+			developmentRegion = English;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+			);
+			mainGroup = A19C0A2F18B28BF400BF2FA8;
+			productRefGroup = A19C0A2F18B28BF400BF2FA8;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A19C0A3418B28BF400BF2FA8 /* libkghost_test */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin XCBuildConfiguration section */
+		A19C0A3518B28BF400BF2FA8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "compilter-default";
+				CLANG_CXX_LIBRARY = "compilter-default";
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_ENABLE_OBJC_EXCEPTIONS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 10.10;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		A19C0A3618B28BF400BF2FA8 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "compilter-default";
+				CLANG_CXX_LIBRARY = "compilter-default";
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_ENABLE_OBJC_EXCEPTIONS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 10.10;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		A19C0A3818B28BF400BF2FA8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				DEBUGGING_SYMBOLS = YES;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Debug;
+		};
+		A19C0A3918B28BF400BF2FA8 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A19C0A3318B28BF400BF2FA8 /* Build configuration list for PBXProject "libkghost_test" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A19C0A3518B28BF400BF2FA8 /* Debug */,
+				A19C0A3618B28BF400BF2FA8 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A19C0A3718B28BF400BF2FA8 /* Build configuration list for PBXLegacyTarget "libkghost_test" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A19C0A3818B28BF400BF2FA8 /* Debug */,
+				A19C0A3918B28BF400BF2FA8 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A19C0A3018B28BF400BF2FA8 /* Project object */;
+}

@@ -1,30 +1,0 @@
-Tlibkghost-test
-v7
-r0
-t400357274.718462
-cCheck dependencies
-cExternalBuildToolExecution libkghost-test
-
-N/usr/bin/make
-c000000004A11964700000000000556C0
-t1242666567
-s349888
-
-CCheck dependencies
-r0
-lSLF07#2@18"Check dependencies400357274#400357274#0(0"0(0#1#0"8602904992#0"0#
-
-CExternalBuildToolExecution libkghost-test
-s400357274.449208
-e400357274.718417
-r1
-xExternalBuildToolExecution
-xlibkghost-test
-ocd ../ && /usr/bin/make 
-omake[1]: Nothing to be done for `all'.
-orm -f bin/debug/64/testd
-og++   -framework OpenGL  -framework GLUT -arch x86_64  -L/lol/lib  -L..//lib/debug/64  obj/debug/64/test_freerec.o obj/debug/64/test_memory_pool.o obj/debug/64/test_rb_tree.o obj/debug/64/test_stack.o obj/debug/64/test_vector.o obj/debug/64/gtest-all.o -lGLEW -lfreenect -lkghostd -o bin/debug/64/testd
-orm -f bin/release/64/test
-og++   -framework OpenGL  -framework GLUT -arch x86_64  -L/lol/lib  -L..//lib/release/64  obj/release/64/test_freerec.o obj/release/64/test_memory_pool.o obj/release/64/test_rb_tree.o obj/release/64/test_stack.o obj/release/64/test_vector.o obj/release/64/gtest-all.o -lGLEW -lfreenect -lkghost -o bin/release/64/test
-lSLF07#2@23"Run external build tool400357274#400357274#0(735"cd ../ && /usr/bin/make make[1]: Nothing to be done for `all'.rm -f bin/debug/64/testdg++   -framework OpenGL  -framework GLUT -arch x86_64  -L/lol/lib  -L..//lib/debug/64  obj/debug/64/test_freerec.o obj/debug/64/test_memory_pool.o obj/debug/64/test_rb_tree.o obj/debug/64/test_stack.o obj/debug/64/test_vector.o obj/debug/64/gtest-all.o -lGLEW -lfreenect -lkghostd -o bin/debug/64/testdrm -f bin/release/64/testg++   -framework OpenGL  -framework GLUT -arch x86_64  -L/lol/lib  -L..//lib/release/64  obj/release/64/test_freerec.o obj/release/64/test_memory_pool.o obj/release/64/test_rb_tree.o obj/release/64/test_stack.o obj/release/64/test_vector.o obj/release/64/gtest-all.o -lGLEW -lfreenect -lkghost -o bin/release/64/test6(13@25"cd ../ && /usr/bin/make 400357274#0#25#0(1@0"0(13@39"make[1]: Nothing to be done for `all'.400357274#25#39#0(1@0"0(13@25"rm -f bin/debug/64/testd400357274#64#25#0(1@0"0(13@303"g++   -framework OpenGL  -framework GLUT -arch x86_64  -L/lol/lib  -L..//lib/debug/64  obj/debug/64/test_freerec.o obj/debug/64/test_memory_pool.o obj/debug/64/test_rb_tree.o obj/debug/64/test_stack.o obj/debug/64/test_vector.o obj/debug/64/gtest-all.o -lGLEW -lfreenect -lkghostd -o bin/debug/64/testd400357274#89#303#0(1@0"0(13@26"rm -f bin/release/64/test400357274#392#26#0(1@0"0(13@317"g++   -framework OpenGL  -framework GLUT -arch x86_64  -L/lol/lib  -L..//lib/release/64  obj/release/64/test_freerec.o obj/release/64/test_memory_pool.o obj/release/64/test_rb_tree.o obj/release/64/test_stack.o obj/release/64/test_vector.o obj/release/64/gtest-all.o -lGLEW -lfreenect -lkghost -o bin/release/64/test400357274#418#317#0(1@0"0(0#0#0"8600335328#113"    cd /Users/ppopp/projects/kinect-ghosts/libkghost/test/prj/xcode_3/../..    setenv ACTION     /usr/bin/make0#
-

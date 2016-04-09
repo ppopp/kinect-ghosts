@@ -1,0 +1,5 @@
+*build-*
+config.status
+config.log
+scripts/gtest-config
+*.deps
