@@ -74,7 +74,7 @@ extern "C" {
 
 	status_t director_playback_layers(
 		director_handle_t handle, 
-		timestamp_t play_time, 
+		timestamp_t delta, 
 		director_frame_layers_t* p_layers);
 
 	status_t director_capture_video(

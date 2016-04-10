@@ -3,6 +3,7 @@
 #include "vector.h"
 #include "motion_detector.h"
 #include "log.h"
+#include "loop.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -12,18 +13,6 @@
 /* TODO: loops could be more musical.  simple loop logic should do */
 
 
-/* loops hold series of frames that can be repeated */
-typedef struct loop_s {
-	vector_handle_t video_addresses;
-	vector_handle_t depth_addresses;
-	vector_handle_t cutoffs;
-	vector_handle_t frame_ids;
-	size_t next_frame;
-	size_t frame_count;
-} loop_t;
-
-static status_t _loop_create(loop_t** pp_loop);
-static void _loop_release(loop_t* p_loop);
 
 /* director sturcture */
 typedef struct director_s {
@@ -134,7 +123,7 @@ status_t director_create(
 	}
 	memset(p_director->playing_loops, 0, sizeof(loop_t*) * max_layers);
 
-	status = _loop_create(&(p_director->p_current_loop));
+	status = loop_create(p_director->frame_store, &(p_director->p_current_loop));
 	if (NO_ERROR != status) {
 		director_release(p_director);
 		return status;
@@ -182,13 +171,13 @@ void director_release(director_handle_t handle) {
 	for (i = 0; i < count; i++) {
 		status = vector_element_copy(handle->loops, i, (void**)&p_loop);
 		if (NO_ERROR != status) {
-			_loop_release(p_loop);
+			loop_release(p_loop);
 		}
 	}
 
 	frame_store_release(handle->frame_store);
 	vector_release(handle->loops);
-	_loop_release(handle->p_current_loop);
+	loop_release(handle->p_current_loop);
 	pthread_mutex_destroy(&(handle->loops_mutex));
 	pthread_mutex_destroy(&(handle->frame_store_mutex));
 	motion_detector_release(handle->motion_detector);
@@ -198,22 +187,22 @@ void director_release(director_handle_t handle) {
 
 status_t director_playback_layers(
 	director_handle_t handle, 
-	timestamp_t play_time, 
+	timestamp_t delta, 
 	director_frame_layers_t* p_layers)
 {
-	status_t status      = NO_ERROR;
-	size_t   count       = 0;
-	size_t   layer_index = 0;
-	size_t   loop_index  = 0;
-	loop_t   *p_loop     = NULL;
-	/* TODO: use timing information to do playback */
+	status_t    status        = NO_ERROR;
+	size_t      count         = 0;
+	size_t      layer_index   = 0;
+	size_t      loop_index    = 0;
+	loop_t      *p_loop       = NULL;
+	timestamp_t timestamp     = 0;
 
 	if ((NULL == handle) || (NULL == p_layers)) {
 		return ERR_NULL_POINTER;
 	}
 
 	p_layers->layer_count = 0;
-
+	/* get number of existing loops */
 	pthread_mutex_lock(&(handle->loops_mutex));
 	status = vector_count(handle->loops, &count);
 	if (NO_ERROR != status) {
@@ -230,9 +219,11 @@ status_t director_playback_layers(
 
 	/* fill any empty loops */
 	for (layer_index = 0; layer_index < handle->max_layers; layer_index++) {
+		/* check if loop is free */
 		if (NULL == handle->playing_loops[layer_index]) {
 			/* choose random loop */
 			loop_index = rand() % count;
+			/* copy internal loop to playing loops */
 			status = vector_element_copy(
 				handle->loops, 
 				loop_index, 
@@ -240,6 +231,23 @@ status_t director_playback_layers(
 			if (NO_ERROR != status) {
 				pthread_mutex_unlock(&(handle->loops_mutex));
 				return status;
+			}
+			/* prepare loop for playback */
+			p_loop = handle->playing_loops[layer_index];
+			p_loop->next_frame = 0;
+			if (p_loop->frame_count > 1) {
+				p_loop->till_next_frame = 0;
+			}
+			else {
+				/* get difference between two frame timestamps */
+				status = loop_frame_timestamp_delta(
+						p_loop,
+						0,
+						1,
+						&(p_loop->till_next_frame));
+				if (NO_ERROR != status) {
+					return status;
+				}
 			}
 		}
 	}
@@ -275,10 +283,38 @@ status_t director_playback_layers(
 			return status;
 		}
 
-		p_loop->next_frame++;
-		if (p_loop->next_frame >= p_loop->frame_count) {
-			p_loop->next_frame = 0;
-			handle->playing_loops[layer_index] = NULL;
+		/* increment frame in loop */
+		if (delta > p_loop->till_next_frame) {
+			/* get time till next frame */
+			timestamp = delta - p_loop->till_next_frame;
+			while (timestamp > 0) {
+				/* increment frame */
+				p_loop->next_frame++;
+				if (p_loop->next_frame >= p_loop->frame_count) {
+					/* finish loop */
+					p_loop->next_frame = 0;
+					handle->playing_loops[layer_index] = NULL;
+					break;
+				}
+				else {
+					/* get difference between two frame timestamps */
+					status = loop_frame_timestamp_delta(
+							p_loop,
+							p_loop->next_frame,
+							p_loop->next_frame + 1,
+							&(p_loop->till_next_frame));
+					if (NO_ERROR != status) {
+						return status;
+					}
+					if (timestamp > p_loop->till_next_frame) {
+						timestamp -= p_loop->till_next_frame;
+					}
+					else {
+						p_loop->till_next_frame -= timestamp;
+						timestamp = -1;
+					}
+				}
+			}
 		}
 	}
 	p_layers->layer_count = handle->max_layers;
@@ -360,60 +396,8 @@ status_t director_capture_depth(
 	return status;
 }
 
-status_t _loop_create(loop_t** pp_loop) {
-	status_t status = NO_ERROR;
-	loop_t* p_loop = NULL;
 
-	if (NULL == pp_loop) {
-		return ERR_NULL_POINTER;
-	}
 
-	p_loop = (loop_t*)malloc(sizeof(loop_t));
-	if (NULL == p_loop) {
-		return ERR_FAILED_ALLOC;
-	}
-	memset(p_loop, 0, sizeof(loop_t));
-
-	p_loop->frame_count = 0;
-	p_loop->next_frame = 0;
-
-	status = vector_create(128, sizeof(void*), &(p_loop->video_addresses));
-	if (NO_ERROR != status) {
-		_loop_release(p_loop);
-		return status;
-	}
-	status = vector_create(128, sizeof(void*), &(p_loop->depth_addresses));
-	if (NO_ERROR != status) {
-		_loop_release(p_loop);
-		return status;
-	}
-	status = vector_create(128, sizeof(frame_id_t), &(p_loop->frame_ids));
-	if (NO_ERROR != status) {
-		_loop_release(p_loop);
-		return status;
-	}
-	status = vector_create(128, sizeof(float), &(p_loop->cutoffs));
-	if (NO_ERROR != status) {
-		_loop_release(p_loop);
-		return status;
-	}
-	
-	*pp_loop = p_loop;
-	return NO_ERROR;
-}
-
-void _loop_release(loop_t* p_loop) {
-	if (NULL == p_loop) {
-		return;
-	}
-	/* TODO: release frames from store */
-
-	vector_release(p_loop->video_addresses);
-	vector_release(p_loop->depth_addresses);
-	vector_release(p_loop->frame_ids);
-	vector_release(p_loop->cutoffs);
-	free(p_loop);
-}
 
 status_t _director_handle_new_frame(
 	director_t* p_director, 
@@ -510,6 +494,11 @@ status_t _director_handle_new_frame(
 			return status;
 		}
 
+		status = vector_append(p_loop->timestamps, (void*)&timestamp);
+		if (NO_ERROR != status) {
+			return status;
+		}
+
 		status = vector_append(p_loop->frame_ids, (void*)&frame_id);
 		if (NO_ERROR != status) {
 			return status;
@@ -532,10 +521,10 @@ status_t _director_handle_new_frame(
 			}
 		}
 		else {
-			_loop_release(p_loop);	
+			loop_release(p_loop);	
 		}
 		p_director->p_current_loop = NULL;
-		status = _loop_create(&(p_director->p_current_loop));
+		status = loop_create(p_director->frame_store, &(p_director->p_current_loop));
 	}
 	
 	return status;
@@ -548,7 +537,7 @@ status_t _director_handle_new_loop(director_t* p_director, loop_t* p_loop) {
 
 	status = _thread_data_create(p_director, p_loop, &p_thread_data);
 	if (NO_ERROR != status) {
-		_loop_release(p_loop);
+		loop_release(p_loop);
 		return status;
 	}
 
@@ -559,7 +548,7 @@ status_t _director_handle_new_loop(director_t* p_director, loop_t* p_loop) {
 		p_thread_data);
 	
 	if (0 != pthread_error) {
-		_loop_release(p_loop);
+		loop_release(p_loop);
 		return ERR_FAILED_THREAD_CREATE;
 	}
 
@@ -646,7 +635,7 @@ void* _handle_new_loop(void* data) {
 	pthread_mutex_unlock(&(director->loops_mutex));
 
 	if (NO_ERROR != status) {
-		_loop_release(p_td->loop);
+		loop_release(p_td->loop);
 		LOG_ERROR("failed to append loop to loops");
 		_thread_data_release(p_td);
 		pthread_exit(NULL);

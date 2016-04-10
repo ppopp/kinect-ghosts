@@ -49,3 +49,9 @@ xcuserdata/
 *.moved-aside
 *.xccheckout
 *.xcscmblueprint
+
+# my stuff
+*bin/release/64
+*bin/release/32
+*bin/debug/64
+*bin/debug/32
