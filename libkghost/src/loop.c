@@ -50,10 +50,28 @@ status_t loop_create(frame_store_handle_t store, loop_t** pp_loop) {
 }
 
 void loop_release(loop_t* p_loop) {
+	frame_id_t* frame_ids = NULL;
+	size_t frame_count = 0;
+	size_t i = 0;
+	status_t status = NO_ERROR;
+
 	if (NULL == p_loop) {
 		return;
 	}
-	/* TODO: release frames from store */
+
+	/* release frame data from frame store */
+	status = vector_array(p_loop->frame_ids, (void**)&frame_ids);
+	if (NO_ERROR == status) {
+		status = vector_count(p_loop->frame_ids, &frame_count);
+		if (NO_ERROR == status) {
+			for (i = 0; i < frame_count; i++) {
+				status = frame_store_remove_frame(p_loop->store, frame_ids[i]);
+				if (NO_ERROR != status) {
+					break;
+				}
+			}
+		}
+	}
 
 	vector_release(p_loop->video_addresses);
 	vector_release(p_loop->depth_addresses);
