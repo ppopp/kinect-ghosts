@@ -24,6 +24,12 @@ typedef struct loop_s {
 
 status_t loop_create(frame_store_handle_t store, loop_t** pp_loop);
 void loop_release(loop_t* p_loop);
+status_t loop_get_frame(
+	loop_t* p_loop,
+	void** video_frame,
+	void** depth_frame,
+	float* cutoff);
+status_t loop_advance_playhead(loop_t* p_loop, timestamp_t delta, size_t* p_frames_left);
 status_t loop_frame_timestamp_delta(
 	loop_t* p_loop,
 	size_t from_frame,

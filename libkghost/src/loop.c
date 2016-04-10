@@ -81,6 +81,90 @@ void loop_release(loop_t* p_loop) {
 	free(p_loop);
 }
 
+status_t loop_get_frame(
+	loop_t* p_loop,
+	void** video_frame,
+	void** depth_frame,
+	float* cutoff)
+{
+	status_t status = NO_ERROR;
+
+	if (NULL == p_loop) {
+		return ERR_NULL_POINTER;
+	}
+	status = vector_element_copy(
+		p_loop->video_addresses,
+		p_loop->next_frame,
+		(void*)video_frame);
+	if (NO_ERROR != status) {
+		return status;
+	}
+	status = vector_element_copy(
+		p_loop->depth_addresses,
+		p_loop->next_frame,
+		(void*)depth_frame);
+	if (NO_ERROR != status) {
+		return status;
+	}
+	status = vector_element_copy(
+		p_loop->cutoffs,
+		p_loop->next_frame,
+		(void*)cutoff);
+	if (NO_ERROR != status) {
+		return status;
+	}
+	return NO_ERROR;
+}
+
+status_t loop_advance_playhead(loop_t* p_loop, timestamp_t delta, size_t* frames_left) {
+	status_t    status    = NO_ERROR;
+	timestamp_t timestamp = 0;
+
+	if ((NULL == p_loop) || (NULL == frames_left)) {
+		return ERR_NULL_POINTER;
+	}
+
+	/* increment frame in loop */
+	if (delta > p_loop->till_next_frame) {
+		/* get time till next frame */
+		timestamp = delta - p_loop->till_next_frame;
+		while (timestamp > 0) {
+			/* increment frame */
+			p_loop->next_frame++;
+			if (p_loop->next_frame >= p_loop->frame_count) {
+				break;
+			}
+			else {
+				/* get difference between two frame timestamps */
+				status = loop_frame_timestamp_delta(
+						p_loop,
+						p_loop->next_frame,
+						p_loop->next_frame + 1,
+						&(p_loop->till_next_frame));
+				if (NO_ERROR != status) {
+					return status;
+				}
+				if (timestamp > p_loop->till_next_frame) {
+					timestamp -= p_loop->till_next_frame;
+				}
+				else {
+					p_loop->till_next_frame -= timestamp;
+					timestamp = -1;
+				}
+			}
+		}
+	}
+
+	if (p_loop->next_frame < p_loop->frame_count) {
+		*frames_left = p_loop->frame_count - p_loop->next_frame;
+	}
+	else {
+		*frames_left = 0;
+	}
+
+	return NO_ERROR;
+}
+
 status_t loop_frame_timestamp_delta(
 	loop_t* p_loop,
 	size_t from_frame,

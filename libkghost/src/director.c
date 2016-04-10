@@ -194,8 +194,8 @@ status_t director_playback_layers(
 	size_t      count         = 0;
 	size_t      layer_index   = 0;
 	size_t      loop_index    = 0;
+	size_t      frames_left   = 0;
 	loop_t      *p_loop       = NULL;
-	timestamp_t timestamp     = 0;
 
 	if ((NULL == handle) || (NULL == p_layers)) {
 		return ERR_NULL_POINTER;
@@ -258,63 +258,23 @@ status_t director_playback_layers(
 		p_loop = handle->playing_loops[layer_index];
 
 		/* copy data pointers to output structure */
-		status = vector_element_copy(
-			p_loop->video_addresses,
-			p_loop->next_frame,
-			(void*)&(p_layers->video_layers[layer_index]));
+		status = loop_get_frame(
+			p_loop,
+			&(p_layers->video_layers[layer_index]),
+			&(p_layers->depth_layers[layer_index]),
+			&(p_layers->depth_cutoffs[layer_index]));
 		if (NO_ERROR != status) {
 			pthread_mutex_unlock(&(handle->loops_mutex));
 			return status;
 		}
-		status = vector_element_copy(
-			p_loop->depth_addresses,
-			p_loop->next_frame,
-			(void*)&(p_layers->depth_layers[layer_index]));
+		status = loop_advance_playhead(p_loop, delta, &frames_left);
 		if (NO_ERROR != status) {
 			pthread_mutex_unlock(&(handle->loops_mutex));
 			return status;
 		}
-		status = vector_element_copy(
-			p_loop->cutoffs,
-			p_loop->next_frame,
-			(void*)&(p_layers->depth_cutoffs[layer_index]));
-		if (NO_ERROR != status) {
-			pthread_mutex_unlock(&(handle->loops_mutex));
-			return status;
-		}
-
-		/* increment frame in loop */
-		if (delta > p_loop->till_next_frame) {
-			/* get time till next frame */
-			timestamp = delta - p_loop->till_next_frame;
-			while (timestamp > 0) {
-				/* increment frame */
-				p_loop->next_frame++;
-				if (p_loop->next_frame >= p_loop->frame_count) {
-					/* finish loop */
-					p_loop->next_frame = 0;
-					handle->playing_loops[layer_index] = NULL;
-					break;
-				}
-				else {
-					/* get difference between two frame timestamps */
-					status = loop_frame_timestamp_delta(
-							p_loop,
-							p_loop->next_frame,
-							p_loop->next_frame + 1,
-							&(p_loop->till_next_frame));
-					if (NO_ERROR != status) {
-						return status;
-					}
-					if (timestamp > p_loop->till_next_frame) {
-						timestamp -= p_loop->till_next_frame;
-					}
-					else {
-						p_loop->till_next_frame -= timestamp;
-						timestamp = -1;
-					}
-				}
-			}
+		if (frames_left < 1) {
+			p_loop->next_frame = 0;
+			handle->playing_loops[layer_index] = NULL;
 		}
 	}
 	p_layers->layer_count = handle->max_layers;
