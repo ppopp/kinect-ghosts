@@ -6,6 +6,7 @@
 #include "loop.h"
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include <pthread.h>
 
@@ -29,6 +30,10 @@ typedef struct director_s {
 	unsigned invalid_frame_count;
 	unsigned loop_min_frame_count;
 	bool_t is_recording;
+
+	void* live_video;
+	void* live_depth;
+	float live_cutoff;
 
 	frame_store_handle_t frame_store;
 	vector_handle_t loops;
@@ -97,6 +102,9 @@ status_t director_create(
 	p_director->invalid_frame_count = 0;
 	p_director->loop_min_frame_count = 10;
 	p_director->is_recording = FALSE;
+	p_director->live_video = NULL;
+	p_director->live_depth = NULL;
+	p_director->live_cutoff = 0.0f;
 
 	/* create internal storage */
 	status = frame_store_create(
@@ -190,12 +198,13 @@ status_t director_playback_layers(
 	timestamp_t delta, 
 	director_frame_layers_t* p_layers)
 {
-	status_t    status        = NO_ERROR;
-	size_t      count         = 0;
-	size_t      layer_index   = 0;
-	size_t      loop_index    = 0;
-	size_t      frames_left   = 0;
-	loop_t      *p_loop       = NULL;
+	status_t status      = NO_ERROR;
+	size_t   count       = 0;
+	size_t   layer_index = 0;
+	size_t   loop_index  = 0;
+	size_t   frames_left = 0;
+	size_t   max_layers  = 0;
+	loop_t   *p_loop     = NULL;
 
 	if ((NULL == handle) || (NULL == p_layers)) {
 		return ERR_NULL_POINTER;
@@ -215,10 +224,17 @@ status_t director_playback_layers(
 		pthread_mutex_unlock(&(handle->loops_mutex));
 		return NO_ERROR;
 	}
-
-
+	
 	/* fill any empty loops */
-	for (layer_index = 0; layer_index < handle->max_layers; layer_index++) {
+	max_layers = handle->max_layers - 1;
+	if (max_layers > count) {
+		max_layers = count;
+	}
+
+	/* TODO: remove this */
+	printf("start frame [%u] %f\n", max_layers, delta);
+    /* TODO: fix logic so multiple loops are not played concurrently */
+	for (layer_index = 0; layer_index < max_layers; layer_index++) {
 		/* check if loop is free */
 		if (NULL == handle->playing_loops[layer_index]) {
 			/* choose random loop */
@@ -246,15 +262,25 @@ status_t director_playback_layers(
 						1,
 						&(p_loop->till_next_frame));
 				if (NO_ERROR != status) {
+					pthread_mutex_unlock(&(handle->loops_mutex));
 					return status;
 				}
 			}
 		}
+		/* TODO: remove this */
+		if (NULL != handle->playing_loops[layer_index]) {
+			printf(
+				"%u:%p [%u:%u] %f\n", 
+				layer_index,
+				(void*)handle->playing_loops[layer_index],
+				handle->playing_loops[layer_index]->next_frame,
+				handle->playing_loops[layer_index]->frame_count,
+				handle->playing_loops[layer_index]->till_next_frame);
+		}
 	}
 
-
 	/* assign layers to structure */
-	for (layer_index = 0; layer_index < handle->max_layers; layer_index++) {
+	for (layer_index = 0; layer_index < max_layers; layer_index++) {
 		p_loop = handle->playing_loops[layer_index];
 
 		/* copy data pointers to output structure */
@@ -277,10 +303,15 @@ status_t director_playback_layers(
 			handle->playing_loops[layer_index] = NULL;
 		}
 	}
-	p_layers->layer_count = handle->max_layers;
-	/* TODO: currently no live screen */
-
 	pthread_mutex_unlock(&(handle->loops_mutex));
+
+	/* assign live video to top layer */
+	p_layers->video_layers[max_layers] = handle->live_video;
+	p_layers->depth_layers[max_layers] = handle->live_depth;
+	p_layers->depth_cutoffs[max_layers] = handle->live_cutoff;
+
+	p_layers->layer_count = max_layers + 1;
+
 	return NO_ERROR;	
 }
 
@@ -407,6 +438,11 @@ status_t _director_handle_new_frame(
 		return status;
 	}
 	pthread_mutex_unlock(&(p_director->frame_store_mutex));
+
+	/* setup live video */
+	p_director->live_video = video;
+	p_director->live_depth = depth;
+	p_director->live_cutoff = *p_cutoff;
 
 	/* run through motion detector */
 	motion_cutoff = (short)((unsigned)(*p_cutoff * 65536) / p_director->depth_scale);

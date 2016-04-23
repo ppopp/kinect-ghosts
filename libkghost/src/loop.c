@@ -131,7 +131,7 @@ status_t loop_advance_playhead(loop_t* p_loop, timestamp_t delta, size_t* frames
 		while (timestamp > 0) {
 			/* increment frame */
 			p_loop->next_frame++;
-			if (p_loop->next_frame >= p_loop->frame_count) {
+			if (p_loop->next_frame >= (p_loop->frame_count - 1)) {
 				break;
 			}
 			else {
@@ -153,6 +153,9 @@ status_t loop_advance_playhead(loop_t* p_loop, timestamp_t delta, size_t* frames
 				}
 			}
 		}
+	}
+	else {
+		p_loop->till_next_frame -= delta;
 	}
 
 	if (p_loop->next_frame < p_loop->frame_count) {
