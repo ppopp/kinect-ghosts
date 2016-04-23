@@ -7,6 +7,10 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+	/** \addtogroup gl
+	 * @{
+	 */
+
 	typedef struct _gl_screen* gl_screen;
 
 	gl_screen gl_screen_create(
@@ -25,6 +29,7 @@ extern "C" {
 		gl_screen screen,
 		GLint positionAttribute,
 		GLint textureUniform);
+	/** @} */
 
 #ifdef __cplusplus
 }

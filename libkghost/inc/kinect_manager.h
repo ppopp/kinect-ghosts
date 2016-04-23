@@ -28,6 +28,10 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+	/** \addtogroup kinect_manager
+	 * @{
+	 */
+
 	typedef struct _kinect_manager_s* kinect_manager_handle_t;
 
 	typedef enum _kinect_manager_resolution_t {
@@ -88,6 +92,7 @@ extern "C" {
 	status_t kinect_manager_get_camera_angle(
 		kinect_manager_handle_t handle,
 		double* p_angle);
+	/** @} */
 
 /* TODO: add control over logging */
 

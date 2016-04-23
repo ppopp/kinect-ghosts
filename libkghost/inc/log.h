@@ -8,6 +8,9 @@
 extern "C" {
 #endif
 
+	/** \addtogroup log
+	 * @{
+	 */
 
 	typedef enum {
 		LOG_LEVEL_ERROR,
@@ -24,14 +27,20 @@ extern "C" {
 	void log_set_stream(FILE* file, log_level_t level);
 	void log_set_stream_all(FILE* file);
 
+	/** @} */
+
 
 #ifdef __cplusplus
 }
 #endif
 
+/** \addtogroup log
+ * @{
+ */
 #define LOG_ERROR(format, ...) log_error (__FILE__, __LINE__, format, ##__VA_ARGS__);
 #define LOG_WARNING(format, ...) log_warning (__FILE__, __LINE__, format, ##__VA_ARGS__);
 #define LOG_INFO(format, ...) log_info(__FILE__, __LINE__, format, ##__VA_ARGS__);
 #define LOG_DEBUG(format, ...) log_debug(__FILE__, __LINE__, format, ##__VA_ARGS__);
+/** @} */
 
 #endif

@@ -50,6 +50,10 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+	/** \addtogroup director
+	 * @{
+	 */
+
 	typedef struct director_s* director_handle_t;
 
 	typedef struct director_frame_layers_s {
@@ -93,6 +97,7 @@ extern "C" {
 	   - constraints on quantizing loops
 	   - ect.
 	   */
+	/** @} */
 
 #ifdef __cplusplus
 }

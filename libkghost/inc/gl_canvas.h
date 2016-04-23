@@ -7,6 +7,9 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+	/** \addtogroup gl
+	 * @{
+	 */
 	typedef struct _gl_canvas* gl_canvas;
 
 	gl_canvas gl_canvas_create();
@@ -15,6 +18,7 @@ extern "C" {
 		gl_canvas canvas,
 		GLint positionAttribute);
 
+	/** @} */
 #ifdef __cplusplus
 }
 #endif

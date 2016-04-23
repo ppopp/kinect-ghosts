@@ -6,6 +6,9 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+	/** \addtogroup rb_tree
+	 * @{
+	 */
 
 	typedef struct rb_tree_node_s* rb_tree_node_handle_t;
 	typedef struct rb_tree_s* rb_tree_handle_t;
@@ -54,6 +57,7 @@ extern "C" {
 		rb_tree_node_handle_t node,
 		void** p_data);
 
+	/** @} */
 #ifdef __cplusplus
 }
 #endif

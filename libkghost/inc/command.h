@@ -10,6 +10,10 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+	/** \addtogroup command
+	 * @{
+	 */
 	typedef int (*command_cb)(const char* cmd, void* data);
 	typedef int (*command_char_test_func)(int val);
 
@@ -26,6 +30,7 @@ extern "C" {
 		int delim,
 		command_char_test_func trimFunc);
 		
+	/** @} */
 
 #ifdef __cplusplus
 }

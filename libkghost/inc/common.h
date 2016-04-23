@@ -33,6 +33,9 @@
 #include <stddef.h>
 
 
+/** \addtogroup common
+ * @{
+ */
 
 
 typedef int status_t;
@@ -52,4 +55,5 @@ const char* error_string(status_t code);
 #define TRUE (1)
 #define FALSE (0)
 
+/** @} */
 #endif

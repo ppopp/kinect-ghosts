@@ -9,6 +9,9 @@ typedef struct motion_detector_s* motion_detector_handle_t;
 #ifdef __cplusplus
 extern "C" {
 #endif
+	/** \addtogroup motion_detector
+	 * @{
+	 */
 	status_t motion_detector_create(
 		size_t pixel_size,
 		size_t pixel_count,
@@ -24,6 +27,7 @@ extern "C" {
 		double* p_motion, 
 		double* p_presence);
 
+	/** @} */
 #ifdef __cplusplus
 }
 #endif

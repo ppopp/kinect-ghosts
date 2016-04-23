@@ -7,6 +7,10 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+	/** \addtogroup gl
+	 * @{
+	 */
+
 	typedef struct _gl_pixel_buffer* gl_pixel_buffer;
 
 	gl_pixel_buffer gl_pixel_buffer_create(
@@ -26,6 +30,7 @@ extern "C" {
 		gl_pixel_buffer pb,
 		GLint textureUniform);
 
+	/** @} */
 #ifdef __cplusplus
 }
 #endif

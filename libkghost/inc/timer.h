@@ -6,6 +6,9 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+	/** \addtogroup timer
+	 * @{
+	 */
 
 	typedef struct timer_s* timer_handle_t;
 
@@ -15,6 +18,7 @@ extern "C" {
 	status_t timer_reset(timer_handle_t handle);
 	status_t timer_current(timer_handle_t handle, double* p_time);
 
+	/** @} */
 #ifdef __cplusplus
 }
 #endif
