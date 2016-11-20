@@ -35,7 +35,10 @@ extern "C" {
 		void** video_frame,
 		void** depth_frame,
 		float* cutoff);
-	status_t loop_advance_playhead(loop_t* p_loop, timestamp_t delta, size_t* p_frames_left);
+	status_t loop_advance_playhead(
+		loop_t* p_loop, 
+		timestamp_t delta, 
+		size_t* p_frames_left);
 	status_t loop_frame_timestamp_delta(
 		loop_t* p_loop,
 		size_t from_frame,

@@ -43,64 +43,6 @@ float smooth_alpha(in float input_depth, in float depth_cutoff) {
 	return 0.0;
 }
 
-
-float blurred_alpha_5x5_gaussian(sampler2D tex, vec2 center) {
-    float alpha = 0.0;
-    // Gaussian Kernel 5 x 5
-    
-    alpha += texture2D(tex, center + vec2(-2.0 * depth_horizontal_pixel_stride, -2.0 * depth_vertical_pixel_stride)).a * 0.003765;
-    alpha += texture2D(tex, center + vec2(-2.0 * depth_horizontal_pixel_stride, -1.0 * depth_vertical_pixel_stride)).a * 0.015019;
-    alpha += texture2D(tex, center + vec2(-2.0 * depth_horizontal_pixel_stride, 0.0 * depth_vertical_pixel_stride)).a * 0.023792;
-    alpha += texture2D(tex, center + vec2(-2.0 * depth_horizontal_pixel_stride, 1.0 * depth_vertical_pixel_stride)).a * 0.015019;
-    alpha += texture2D(tex, center + vec2(-2.0 * depth_horizontal_pixel_stride, 2.0 * depth_vertical_pixel_stride)).a * 0.003765;
-    alpha += texture2D(tex, center + vec2(-1.0 * depth_horizontal_pixel_stride, -2.0 * depth_vertical_pixel_stride)).a * 0.015019;
-    alpha += texture2D(tex, center + vec2(-1.0 * depth_horizontal_pixel_stride, -1.0 * depth_vertical_pixel_stride)).a * 0.059912;
-    alpha += texture2D(tex, center + vec2(-1.0 * depth_horizontal_pixel_stride, 0.0 * depth_vertical_pixel_stride)).a * 0.094907;
-    alpha += texture2D(tex, center + vec2(-1.0 * depth_horizontal_pixel_stride, 1.0 * depth_vertical_pixel_stride)).a * 0.059912;
-    alpha += texture2D(tex, center + vec2(-1.0 * depth_horizontal_pixel_stride, 2.0 * depth_vertical_pixel_stride)).a * 0.015019;
-    alpha += texture2D(tex, center + vec2(0.0 * depth_horizontal_pixel_stride, -2.0 * depth_vertical_pixel_stride)).a * 0.023792;
-    alpha += texture2D(tex, center + vec2(0.0 * depth_horizontal_pixel_stride, -1.0 * depth_vertical_pixel_stride)).a * 0.094907;
-    alpha += texture2D(tex, center + vec2(0.0 * depth_horizontal_pixel_stride, 0.0 * depth_vertical_pixel_stride)).a * 0.150342;
-    alpha += texture2D(tex, center + vec2(0.0 * depth_horizontal_pixel_stride, 1.0 * depth_vertical_pixel_stride)).a * 0.094907;
-    alpha += texture2D(tex, center + vec2(0.0 * depth_horizontal_pixel_stride, 2.0 * depth_vertical_pixel_stride)).a * 0.023792;
-    alpha += texture2D(tex, center + vec2(1.0 * depth_horizontal_pixel_stride, -2.0 * depth_vertical_pixel_stride)).a * 0.015019;
-    alpha += texture2D(tex, center + vec2(1.0 * depth_horizontal_pixel_stride, -1.0 * depth_vertical_pixel_stride)).a * 0.059912;
-    alpha += texture2D(tex, center + vec2(1.0 * depth_horizontal_pixel_stride, 0.0 * depth_vertical_pixel_stride)).a * 0.094907;
-    alpha += texture2D(tex, center + vec2(1.0 * depth_horizontal_pixel_stride, 1.0 * depth_vertical_pixel_stride)).a * 0.059912;
-    alpha += texture2D(tex, center + vec2(1.0 * depth_horizontal_pixel_stride, 2.0 * depth_vertical_pixel_stride)).a * 0.015019;
-    alpha += texture2D(tex, center + vec2(2.0 * depth_horizontal_pixel_stride, -2.0 * depth_vertical_pixel_stride)).a * 0.003765;
-    alpha += texture2D(tex, center + vec2(2.0 * depth_horizontal_pixel_stride, -1.0 * depth_vertical_pixel_stride)).a * 0.015019;
-    alpha += texture2D(tex, center + vec2(2.0 * depth_horizontal_pixel_stride, 0.0 * depth_vertical_pixel_stride)).a * 0.023792;
-    alpha += texture2D(tex, center + vec2(2.0 * depth_horizontal_pixel_stride, 1.0 * depth_vertical_pixel_stride)).a * 0.015019;
-    alpha += texture2D(tex, center + vec2(2.0 * depth_horizontal_pixel_stride, 2.0 * depth_vertical_pixel_stride)).a * 0.003765;
-     			
-    return alpha;
-} 
-
-float blurred_alpha_average(sampler2D tex, vec2 center, int size) {
-	float alpha = texture2D(tex, center).a;
-	int cntr = 0;
-	if (alpha != 0.0) {
-		cntr = 1;
-	}
-	float half_width = depth_horizontal_pixel_stride * float(size) / 2.0;
-	float half_height = depth_vertical_pixel_stride * float(size) / 2.0;
-
-	for (float x = -half_width; x < half_width; x += depth_horizontal_pixel_stride) {
-		for (float y = -half_height; y < half_height; y += depth_vertical_pixel_stride) {
-			float val = texture2D(tex, center + vec2(x, y)).a;
-			if (val != 0.0) {
-				alpha += val;
-				cntr += 1;
-			}
-		}
-	}
-	if (cntr > 0) {
-		return alpha / float(cntr);
-	}
-	return 1.0;
-}
-
 float add_sampler(
 	in sampler2D video_texture, 
 	in sampler2D depth_texture, 
@@ -108,25 +50,32 @@ float add_sampler(
 	in float best_depth) 
 {
 	vec4 new_color = vec4(0.0, 0.0, 0.0, 1.0);
-	//float depth = texture2D(depth_texture, texcoord).a;
-	//float depth = blurred_alpha_5x5_gaussian(depth_texture, texcoord);
-	float depth = blurred_alpha_average(depth_texture, texcoord, 15);
+	float depth = texture2D(depth_texture, texcoord).a;
 	float alpha = smooth_alpha(depth, depth_cutoff);
 
+	if (alpha > 0.1) {
+		alpha = 0.5;
+	}
+
 	if (depth != 0.0) {
-		if (depth < best_depth) {
+		//if (depth < best_depth) {
 			if (alpha > 0.0) {
 				new_color = texture2D(video_texture, texcoord);
 				new_color.a = alpha;
 				if (alpha >= 1.0) {
 					gl_FragColor = new_color;
 				}
+				else if (gl_FragColor.a > 0.1) {
+					//gl_FragColor = (gl_FragColor + new_color);
+					gl_FragColor = new_color;
+				}
 				else {
-					gl_FragColor = (gl_FragColor + new_color);
+					//gl_FragColor = (gl_FragColor + new_color);
+					gl_FragColor = new_color;
 				}
 				return depth;
 			}
-		}
+		//}
 		else if (gl_FragColor.a < 1.0) {
 			new_color = texture2D(video_texture, texcoord);
 			new_color.a = alpha;
@@ -143,6 +92,8 @@ void main()
 	// bummer
 	gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
 	float best_depth = 100000.0;
+	float test = depth_horizontal_pixel_stride;
+	float test2 = depth_vertical_pixel_stride;
 
 	if (count > 0) {
 		best_depth = add_sampler(
@@ -201,4 +152,3 @@ void main()
 			best_depth);
 	}
 }
-

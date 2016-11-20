@@ -10,9 +10,7 @@
 #include <string.h>
 #include <pthread.h>
 
-/* TODO: add way to remove a loop */
 /* TODO: loops could be more musical.  simple loop logic should do */
-
 
 
 /* director sturcture */
@@ -29,6 +27,7 @@ typedef struct director_s {
 	unsigned valid_frame_patience;
 	unsigned invalid_frame_count;
 	unsigned loop_min_frame_count;
+	unsigned max_loops;
 	bool_t is_recording;
 
 	void* live_video;
@@ -46,6 +45,7 @@ typedef struct director_s {
 
 static status_t _director_handle_new_frame(director_t* p_director, frame_id_t frame_id);
 static status_t _director_handle_new_loop(director_t* p_director, loop_t* p_loop);
+static status_t _director_free_loop(director_t* p_director, size_t loop_index);
 
 /* thread data used to handle new loops */
 typedef struct thread_data_s {
@@ -101,6 +101,7 @@ status_t director_create(
 	p_director->valid_frame_patience = 5;
 	p_director->invalid_frame_count = 0;
 	p_director->loop_min_frame_count = 10;
+	p_director->max_loops = 10;
 	p_director->is_recording = FALSE;
 	p_director->live_video = NULL;
 	p_director->live_depth = NULL;
@@ -200,10 +201,12 @@ status_t director_playback_layers(
 {
 	status_t status      = NO_ERROR;
 	size_t   count       = 0;
-	size_t   layer_index = 0;
-	size_t   loop_index  = 0;
+	size_t   input_layer_index = 0;
+	size_t   output_layer_index = 0;
+	size_t   iter        = 0;
 	size_t   frames_left = 0;
 	size_t   max_layers  = 0;
+	bool_t   skip        = FALSE;
 	loop_t   *p_loop     = NULL;
 
 	if ((NULL == handle) || (NULL == p_layers)) {
@@ -211,6 +214,7 @@ status_t director_playback_layers(
 	}
 
 	p_layers->layer_count = 0;
+
 	/* get number of existing loops */
 	pthread_mutex_lock(&(handle->loops_mutex));
 	status = vector_count(handle->loops, &count);
@@ -227,29 +231,30 @@ status_t director_playback_layers(
 	
 	/* fill any empty loops */
 	max_layers = handle->max_layers - 1;
-	if (max_layers > count) {
-		max_layers = count;
-	}
 
-	/* TODO: remove this */
-	printf("start frame [%u] %f\n", max_layers, delta);
-    /* TODO: fix logic so multiple loops are not played concurrently */
-	for (layer_index = 0; layer_index < max_layers; layer_index++) {
+	//printf("-\n");
+	for (input_layer_index = 0; input_layer_index < max_layers; input_layer_index++) {
 		/* check if loop is free */
-		if (NULL == handle->playing_loops[layer_index]) {
+		if (NULL == handle->playing_loops[input_layer_index]) {
 			/* choose random loop */
-			loop_index = rand() % count;
-			/* copy internal loop to playing loops */
 			status = vector_element_copy(
 				handle->loops, 
-				loop_index, 
-				(void*)&(handle->playing_loops[layer_index]));
-			if (NO_ERROR != status) {
-				pthread_mutex_unlock(&(handle->loops_mutex));
-				return status;
+				rand() % count, 
+				(void*)&p_loop);
+
+			/* skip this round if randomly chosen loop already in playing loops structure */
+			skip = FALSE;
+			for (iter = 0; iter < max_layers; iter++) {
+				if (p_loop == handle->playing_loops[iter]) {
+					//printf("skip\n");
+					skip = TRUE;
+				}
 			}
+			if (TRUE == skip) {
+				continue;
+			}
+
 			/* prepare loop for playback */
-			p_loop = handle->playing_loops[layer_index];
 			p_loop->next_frame = 0;
 			if (p_loop->frame_count > 1) {
 				p_loop->till_next_frame = 0;
@@ -266,33 +271,43 @@ status_t director_playback_layers(
 					return status;
 				}
 			}
+
+			handle->playing_loops[input_layer_index] = p_loop;
 		}
-		/* TODO: remove this */
-		if (NULL != handle->playing_loops[layer_index]) {
+
+		/* TODO: remove this 
+		if (NULL != handle->playing_loops[input_layer_index]) {
 			printf(
 				"%u:%p [%u:%u] %f\n", 
-				layer_index,
-				(void*)handle->playing_loops[layer_index],
-				handle->playing_loops[layer_index]->next_frame,
-				handle->playing_loops[layer_index]->frame_count,
-				handle->playing_loops[layer_index]->till_next_frame);
+				input_layer_index,
+				(void*)handle->playing_loops[input_layer_index],
+				handle->playing_loops[input_layer_index]->next_frame,
+				handle->playing_loops[input_layer_index]->frame_count,
+				handle->playing_loops[input_layer_index]->till_next_frame);
 		}
+		*/
 	}
 
 	/* assign layers to structure */
-	for (layer_index = 0; layer_index < max_layers; layer_index++) {
-		p_loop = handle->playing_loops[layer_index];
+	output_layer_index = 0;
+	for (input_layer_index = 0; input_layer_index < max_layers; input_layer_index++) {
+		p_loop = handle->playing_loops[input_layer_index];
+		if (NULL == p_loop) {
+			continue;
+		}
 
 		/* copy data pointers to output structure */
 		status = loop_get_frame(
 			p_loop,
-			&(p_layers->video_layers[layer_index]),
-			&(p_layers->depth_layers[layer_index]),
-			&(p_layers->depth_cutoffs[layer_index]));
+			&(p_layers->video_layers[output_layer_index]),
+			&(p_layers->depth_layers[output_layer_index]),
+			&(p_layers->depth_cutoffs[output_layer_index]));
 		if (NO_ERROR != status) {
 			pthread_mutex_unlock(&(handle->loops_mutex));
 			return status;
 		}
+		output_layer_index++;
+
 		status = loop_advance_playhead(p_loop, delta, &frames_left);
 		if (NO_ERROR != status) {
 			pthread_mutex_unlock(&(handle->loops_mutex));
@@ -300,17 +315,17 @@ status_t director_playback_layers(
 		}
 		if (frames_left < 1) {
 			p_loop->next_frame = 0;
-			handle->playing_loops[layer_index] = NULL;
+			handle->playing_loops[input_layer_index] = NULL;
 		}
 	}
 	pthread_mutex_unlock(&(handle->loops_mutex));
 
 	/* assign live video to top layer */
-	p_layers->video_layers[max_layers] = handle->live_video;
-	p_layers->depth_layers[max_layers] = handle->live_depth;
-	p_layers->depth_cutoffs[max_layers] = handle->live_cutoff;
+	p_layers->video_layers[output_layer_index] = handle->live_video;
+	p_layers->depth_layers[output_layer_index] = handle->live_depth;
+	p_layers->depth_cutoffs[output_layer_index] = handle->live_cutoff;
 
-	p_layers->layer_count = max_layers + 1;
+	p_layers->layer_count = output_layer_index + 1;
 
 	return NO_ERROR;	
 }
@@ -551,6 +566,33 @@ status_t _director_handle_new_loop(director_t* p_director, loop_t* p_loop) {
 	return NO_ERROR;
 }
 
+status_t _director_free_loop(director_t* p_director, size_t loop_index) {
+	loop_t*  p_loop = NULL;
+	size_t   index  = 0;
+	status_t status = NO_ERROR;
+
+	/* check if loop is currently being played before releasing */
+	status = vector_element_copy(p_director->loops, loop_index, &p_loop);
+	if (NO_ERROR != status) {
+		return status;
+	}
+	for (index = 0; index < p_director->max_layers; index++) {
+		if (p_director->playing_loops[index] == p_loop) {
+			p_director->playing_loops[index] = NULL;
+		}
+	}
+
+	/* remove loop from loops vector */
+	status = vector_remove(p_director->loops, loop_index);
+	if (NO_ERROR != status) {
+		return status;
+	}
+	/* free loop */
+	loop_release(p_loop);
+
+	return NO_ERROR;
+}
+
 status_t _thread_data_create(
 	director_t* p_director,
 	loop_t* p_loop,
@@ -588,6 +630,8 @@ void* _handle_new_loop(void* data) {
 	thread_data_t* p_td = (thread_data_t*)data;
 	//motion_detector_handle_t motion_detector = NULL;
 	size_t pixel_count = 0;
+	size_t loop_count = 0;
+	size_t loop_to_remove = 0;
 	//size_t frame_count = 0;
 	//size_t i = 0;
 	director_t* director = NULL;
@@ -614,7 +658,6 @@ void* _handle_new_loop(void* data) {
 		*/
 
 	/* TODO: trim frames at beginning and end w/o enough presence or motion */
-	/* TODO: remove old loops if too many loops exist */
 	/*
 	for (i = 0; i < frame_count; i++) {
 		status_t motion_detector_detect(
@@ -626,8 +669,19 @@ void* _handle_new_loop(void* data) {
 	}
 	*/
 
+	/* lock thread to protect loop vector */
 	pthread_mutex_lock(&(director->loops_mutex));
-	status = vector_append(director->loops, (void*)&(p_td->loop));
+	status = vector_count(director->loops, &loop_count);
+	if ((NO_ERROR == status) && (loop_count >= director->max_loops)) {
+		/* randomly remove an older loop */
+		loop_to_remove = rand() % (loop_count / 2 + 1);
+		/* TODO: if this causes glitches, could make a "remove loop queue" */
+		status = _director_free_loop(director, loop_to_remove);
+	}
+	if (NO_ERROR == status) {
+		status = vector_append(director->loops, (void*)&(p_td->loop));
+	}
+	/* unlock thread to protect loop vector */
 	pthread_mutex_unlock(&(director->loops_mutex));
 
 	if (NO_ERROR != status) {
