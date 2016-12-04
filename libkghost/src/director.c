@@ -12,6 +12,19 @@
 
 /* TODO: loops could be more musical.  simple loop logic should do */
 
+/* TODO: are these in seconds? */
+static const size_t _valid_duration_count = 7;
+static const timestamp_t _valid_durations[_valid_duration_count] = {
+	1.0,
+	1.3333333333333,
+	2.0,
+	4.0,
+	5.3333333333333,
+	8.0,
+	16.0
+};
+
+
 
 /* director sturcture */
 typedef struct director_s {
@@ -297,7 +310,7 @@ status_t director_playback_layers(
 		}
 
 		/* copy data pointers to output structure */
-		status = loop_get_frame(
+		status = loop_get_next_frame(
 			p_loop,
 			&(p_layers->video_layers[output_layer_index]),
 			&(p_layers->depth_layers[output_layer_index]),
@@ -628,13 +641,25 @@ void _thread_data_release(thread_data_t* p_td) {
 void* _handle_new_loop(void* data) {
 	status_t status = NO_ERROR;
 	thread_data_t* p_td = (thread_data_t*)data;
-	//motion_detector_handle_t motion_detector = NULL;
 	size_t pixel_count = 0;
 	size_t loop_count = 0;
 	size_t loop_to_remove = 0;
-	//size_t frame_count = 0;
-	//size_t i = 0;
+	double* motions = NULL;
+	double* presences = NULL;
+	timestamp_t* timestamps = NULL;
+	timestamp_t duration = 0.0;
+	frame_id_t* frame_ids = NULL;
+	size_t frame_count = 0;
+	size_t last_frame = 0;
+	void* video = NULL;
+	void* depth = NULL;
+	float cutoff = 0.0f;
+	int motion_cutoff = 0;
+	size_t i = 0;
 	director_t* director = NULL;
+	loop_t* loop = NULL;
+	motion_detector_handle_t motion_detector = NULL;
+	timestamp_t closest_duration = 0.0;
 
 	if (NULL == p_td) {
 		LOG_ERROR("null thread data")
@@ -643,8 +668,29 @@ void* _handle_new_loop(void* data) {
 
 	director = p_td->director;
 	pixel_count = director->bytes_per_depth_frame / director->bytes_per_depth_pixel;
+	loop = p_td->loop;
 
-	/* create motion detector 
+	/* malloc vectors to hold motion, presence and timestmaps*/
+	frame_count = loop->frame_count;
+	motions = malloc(sizeof(double) * frame_count);
+	presences = malloc(sizeof(double) * frame_count);
+	timestamps = malloc(sizeof(timestamp_t) * frame_count);
+	frame_ids = malloc(sizeof(frame_id_t) * frame_count);
+	if ((NULL == timestamps) || 
+		(NULL == presences) || 
+		(NULL == motions) || 
+		(NULL == frame_ids)) 
+	{
+		LOG_ERROR("failed alloc");
+		free(motions);
+		free(presences);
+		free(timestamps);
+		free(frame_ids);
+		return NULL;
+	}
+
+
+	/* create motion detector */
 	status = motion_detector_create(
 		p_td->director->bytes_per_depth_pixel,
 		pixel_count,
@@ -652,22 +698,134 @@ void* _handle_new_loop(void* data) {
 		&motion_detector);
 	if (NO_ERROR != status) {
 		LOG_ERROR("failed to create motion detector");
+		free(motions);
+		free(presences);
+		free(timestamps);
 		return NULL;
 	}
 
-		*/
 
-	/* TODO: trim frames at beginning and end w/o enough presence or motion */
-	/*
+	/* calculate presence, motion & timestamp from loops */
 	for (i = 0; i < frame_count; i++) {
-		status_t motion_detector_detect(
-			motion_detector_handle_t handle,
-			void* depth, 
-			int cutoff, 
-			double* p_motion, 
-			double* p_presence);
+		status = loop_get_frame(loop, i, &frame_ids[i], &timestamps[i], &video, &depth, &cutoff);
+		if (NO_ERROR != status) {
+			LOG_ERROR("failed to get frame from loop");
+			break;
+		}
+
+		motion_cutoff = (short)((unsigned)(cutoff * 65536) / director->depth_scale);
+		status = motion_detector_detect(
+			motion_detector,
+			depth, 
+			motion_cutoff, 
+			&motions[i], 
+			&presences[i]);
+		if (NO_ERROR != status) {
+			LOG_ERROR("failed to run motion detector");
+			break;
+		}
 	}
-	*/
+
+	/* go through backwards removing frames from end */
+	for (i = frame_count; i-- > 0; ) {
+		if ((motions[i] < director->valid_frame_min_motion) ||
+			(presences[i] < director->valid_frame_min_presence))
+		{
+			status = loop_remove_frame(loop, frame_ids[i]);
+			if (NO_ERROR != status) {
+				break;
+			}
+			frame_count--;
+		}
+		else {
+			break;
+		}
+	}
+	/* cleanup if error occurred during loop */
+	if (NO_ERROR != status) {
+		motion_detector_release(motion_detector);
+		free(motions);
+		free(presences);
+		free(timestamps);
+		free(frame_ids);
+		return NULL;
+	}
+
+	/* get duration of remaining frames */
+	for (i = 1; i < frame_count; i++) {
+		/* make sure a timestamp rollover didn't occur */
+		if (timestamps[i] < timestamps[i-1]) {
+			LOG_ERROR("timestamps decrease during loop");
+			status = ERR_INVALID_TIMESTAMP;
+			break;
+		}
+		duration += timestamps[i] - timestamps[i-1];
+	}
+	/* cleanup if error occurred during loop */
+	if (NO_ERROR != status) {
+		motion_detector_release(motion_detector);
+		free(motions);
+		free(presences);
+		free(timestamps);
+		free(frame_ids);
+		return NULL;
+	}
+
+	/* find nearest duration to valid durations */
+	closest_duration = -1.0;
+	for (i = 0; i < _valid_duration_count; i++) {
+		if (duration >= _valid_durations[i]) {
+			if (_valid_durations[i] > closest_duration) {
+				closest_duration = _valid_durations[i];
+			}
+		}
+		else {
+			break;
+		}
+	}
+	if (closest_duration < 0.0) {
+		/* video is too short */
+		motion_detector_release(motion_detector);
+		free(motions);
+		free(presences);
+		free(timestamps);
+		free(frame_ids);
+		return NULL;
+	}
+
+	/* remove frames from end to match duration */
+	duration = 0;
+	for (i = 0; i < frame_count; i++) {
+		duration += timestamps[i] - timestamps[i-1];
+		if (duration > closest_duration) {
+			last_frame = i;
+		}
+	}
+	for (i = last_frame; i < frame_count; i++) {
+		status = loop_remove_frame(loop, frame_ids[i]);
+		if (status != NO_ERROR) {
+			motion_detector_release(motion_detector);
+			free(motions);
+			free(presences);
+			free(timestamps);
+			free(frame_ids);
+			return NULL;
+		}
+	}
+	frame_count = last_frame;
+
+	/* TODO: in all the above errors, should we free the loop if we exit this function early? */
+	/* TODO: also because in a thread, we should set some error or log an error */
+
+	/* check that enough frames left */
+	if (frame_count < director->loop_min_frame_count) {
+		motion_detector_release(motion_detector);
+		free(motions);
+		free(presences);
+		free(timestamps);
+		free(frame_ids);
+		return NULL;
+	}
 
 	/* lock thread to protect loop vector */
 	pthread_mutex_lock(&(director->loops_mutex));
@@ -683,6 +841,13 @@ void* _handle_new_loop(void* data) {
 	}
 	/* unlock thread to protect loop vector */
 	pthread_mutex_unlock(&(director->loops_mutex));
+
+	/* cleanup */
+	motion_detector_release(motion_detector);
+	free(motions);
+	free(presences);
+	free(timestamps);
+	free(frame_ids);
 
 	if (NO_ERROR != status) {
 		loop_release(p_td->loop);

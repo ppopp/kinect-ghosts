@@ -1,4 +1,5 @@
 #include "loop.h"
+#include "log.h"
 
 status_t loop_create(frame_store_handle_t store, loop_t** pp_loop) {
 	status_t status = NO_ERROR;
@@ -83,6 +84,9 @@ void loop_release(loop_t* p_loop) {
 
 status_t loop_get_frame(
 	loop_t* p_loop,
+	size_t index,
+	frame_id_t* frame_id,
+	timestamp_t* timestamp,
 	void** video_frame,
 	void** depth_frame,
 	float* cutoff)
@@ -92,24 +96,129 @@ status_t loop_get_frame(
 	if (NULL == p_loop) {
 		return ERR_NULL_POINTER;
 	}
-	status = vector_element_copy(
-		p_loop->video_addresses,
-		p_loop->next_frame,
-		(void*)video_frame);
+	if (NULL != frame_id) {
+		status = vector_element_copy(
+			p_loop->frame_ids,
+			index,
+			(void*)frame_id);
+		if (NO_ERROR != status) {
+			return status;
+		}
+	}
+	if (NULL != timestamp) {
+		status = vector_element_copy(
+			p_loop->timestamps,
+			index,
+			(void*)timestamp);
+		if (NO_ERROR != status) {
+			return status;
+		}
+	}
+	if (NULL != video_frame) {
+		status = vector_element_copy(
+			p_loop->video_addresses,
+			index,
+			(void*)video_frame);
+		if (NO_ERROR != status) {
+			return status;
+		}
+	}
+	if (NULL != depth_frame) {	
+		status = vector_element_copy(
+			p_loop->depth_addresses,
+			index,
+			(void*)depth_frame);
+		if (NO_ERROR != status) {
+			return status;
+		}
+	}
+	if (NULL != cutoff) {
+		status = vector_element_copy(
+			p_loop->cutoffs,
+			index,
+			(void*)cutoff);
+		if (NO_ERROR != status) {
+			return status;
+		}
+	}
+	return NO_ERROR;
+}
+
+status_t loop_get_next_frame(
+	loop_t* p_loop,
+	void** video_frame,
+	void** depth_frame,
+	float* cutoff)
+{
+	if (NULL == p_loop) {
+		return ERR_NULL_POINTER;
+	}
+
+	return loop_get_frame(
+		p_loop, 
+		p_loop->next_frame, 
+		NULL,
+		NULL,
+		video_frame, 
+		depth_frame, 
+		cutoff);
+}
+
+status_t loop_remove_frame(loop_t* p_loop, frame_id_t frame_id) {
+	status_t status = NO_ERROR;
+	size_t frame_index = 0;
+	size_t index = 0;
+	frame_id_t* frame_id_array = NULL;
+
+	if (NULL == p_loop) {
+		return ERR_NULL_POINTER;
+	}
+
+	/* find frame index matching frame id */
+	status = vector_array(p_loop->frame_ids, (void**)&frame_id_array);
 	if (NO_ERROR != status) {
 		return status;
 	}
-	status = vector_element_copy(
-		p_loop->depth_addresses,
-		p_loop->next_frame,
-		(void*)depth_frame);
+
+	frame_index = p_loop->frame_count;
+	for(index = 0; index < p_loop->frame_count; index++) {
+		if (frame_id == frame_id_array[index]) {
+			frame_index = index;
+			break;
+		}
+	}
+	/* return error if match not found */
+	if (frame_index >= p_loop->frame_count) {
+		return ERR_INVALID_ARGUMENT;
+	}
+
+	status = vector_remove(p_loop->video_addresses, frame_index);
 	if (NO_ERROR != status) {
 		return status;
 	}
-	status = vector_element_copy(
-		p_loop->cutoffs,
-		p_loop->next_frame,
-		(void*)cutoff);
+	status = vector_remove(p_loop->depth_addresses, frame_index);
+	if (NO_ERROR != status) {
+		LOG_WARNING("loop structure corrupted during frame removal");
+		return status;
+	}
+	status = vector_remove(p_loop->cutoffs, frame_index);
+	if (NO_ERROR != status) {
+		LOG_WARNING("loop structure corrupted during frame removal");
+		return status;
+	}
+	status = vector_remove(p_loop->timestamps, frame_index);
+	if (NO_ERROR != status) {
+		LOG_WARNING("loop structure corrupted during frame removal");
+		return status;
+	}
+	status = vector_remove(p_loop->frame_ids, frame_index);
+	if (NO_ERROR != status) {
+		LOG_WARNING("loop structure corrupted during frame removal");
+		return status;
+	}
+	p_loop->frame_count--;
+
+	status = frame_store_remove_frame(p_loop->store, frame_id);
 	if (NO_ERROR != status) {
 		return status;
 	}

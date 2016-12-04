@@ -30,7 +30,19 @@ extern "C" {
 
 	status_t loop_create(frame_store_handle_t store, loop_t** pp_loop);
 	void loop_release(loop_t* p_loop);
+
 	status_t loop_get_frame(
+		loop_t* p_loop,
+		size_t index,
+		frame_id_t* frame_id,
+		timestamp_t* timestamp,
+		void** video_frame,
+		void** depth_frame,
+		float* cutoff);
+
+	status_t loop_remove_frame(loop_t* p_loop, frame_id_t frame_id);
+
+	status_t loop_get_next_frame(
 		loop_t* p_loop,
 		void** video_frame,
 		void** depth_frame,
