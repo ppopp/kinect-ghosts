@@ -51,7 +51,7 @@ TEST(MotionDetector, Smoke) {
 		&presence);
 	ASSERT_EQ(status, NO_ERROR);
 	ASSERT_DOUBLE_EQ(motion, 0.0);
-	ASSERT_DOUBLE_EQ(presence, 0.25);
+	ASSERT_DOUBLE_EQ(presence, 0.75);
 	status = motion_detector_detect(
 		handle,
 		(void*)frame_b,
@@ -60,7 +60,7 @@ TEST(MotionDetector, Smoke) {
 		&presence);
 	ASSERT_EQ(status, NO_ERROR);
 	ASSERT_DOUBLE_EQ(motion, 0.375);
-	ASSERT_DOUBLE_EQ(presence, 0.375);
+	ASSERT_DOUBLE_EQ(presence, 0.625);
 	status = motion_detector_detect(
 		handle,
 		(void*)frame_b,
@@ -69,7 +69,7 @@ TEST(MotionDetector, Smoke) {
 		&presence);
 	ASSERT_EQ(status, NO_ERROR);
 	ASSERT_DOUBLE_EQ(motion, 0.0);
-	ASSERT_DOUBLE_EQ(presence, 0.375);
+	ASSERT_DOUBLE_EQ(presence, 0.625);
 	status = motion_detector_detect(
 		handle,
 		(void*)frame_a,
@@ -90,7 +90,7 @@ TEST(MotionDetector, Smoke) {
 		&presence);
 	ASSERT_EQ(status, NO_ERROR);
 	ASSERT_DOUBLE_EQ(motion, 0.0);
-	ASSERT_DOUBLE_EQ(presence, 0.375);
+	ASSERT_DOUBLE_EQ(presence, 0.625);
 	status = motion_detector_detect(
 		handle,
 		(void*)frame_a,
@@ -99,7 +99,7 @@ TEST(MotionDetector, Smoke) {
 		&presence);
 	ASSERT_EQ(status, NO_ERROR);
 	ASSERT_DOUBLE_EQ(motion, 0.375);
-	ASSERT_DOUBLE_EQ(presence, 0.25);
+	ASSERT_DOUBLE_EQ(presence, 0.75);
 
 
 	motion_detector_release(handle);

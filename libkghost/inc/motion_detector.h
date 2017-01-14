@@ -20,6 +20,8 @@ extern "C" {
 	void motion_detector_release(motion_detector_handle_t handle);
 
 	status_t motion_detector_reset(motion_detector_handle_t handle);
+	/* motion and presence are calculated by finding the number of depth pixels
+	 * which are less than or equal to the cutoff */
 	status_t motion_detector_detect(
 		motion_detector_handle_t handle,
 		void* depth, 
