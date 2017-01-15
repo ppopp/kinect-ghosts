@@ -11,9 +11,12 @@
 #include <pthread.h>
 
 /* TODO: loops could be more musical.  simple loop logic should do */
+/* TODO: make a maximum loop frame count to keep loops from getting too big */
+/* TODO: handle out of memory issues by releasing stuff. */
+/* TODO: have process controlling # of layers. */
 
-/* TODO: are these in seconds? */
 static const size_t _valid_duration_count = 7;
+/*
 static const timestamp_t _valid_durations[_valid_duration_count] = {
 	1.0,
 	1.3333333333333,
@@ -22,6 +25,16 @@ static const timestamp_t _valid_durations[_valid_duration_count] = {
 	5.3333333333333,
 	8.0,
 	16.0
+};
+*/
+static const timestamp_t _valid_durations[_valid_duration_count] = {
+	0.25,
+	0.3333333333333,
+	0.5,
+	1.0,
+	1.3333333333333,
+	2.0,
+	4.0
 };
 
 
@@ -111,7 +124,7 @@ status_t director_create(
 	p_director->depth_scale = depth_scale;
 	p_director->valid_frame_min_presence = 0.05;
 	p_director->valid_frame_min_motion = 0.01;
-	p_director->valid_frame_patience = 5;
+	p_director->valid_frame_patience = 25;
 	p_director->invalid_frame_count = 0;
 	p_director->loop_min_frame_count = 10;
 	p_director->max_loops = 10;
@@ -736,6 +749,7 @@ void* _handle_new_loop(void* data) {
 	}
 
 	/* go through backwards removing frames from end */
+	LOG_DEBUG("beginning loop trimming from end. original frame count %d", frame_count);
 	if ((NO_ERROR == status) && valid_video) {
 		for (i = frame_count; i-- > 0; ) {
 			if ((motions[i] < director->valid_frame_min_motion) ||
@@ -747,6 +761,11 @@ void* _handle_new_loop(void* data) {
 					LOG_ERROR("failed to remove frame");
 					break;
 				}
+				LOG_DEBUG(
+					"removing frame %d with motion %f and presence %f", 
+					i,
+					motions[i],
+					presences[i]);
 				frame_count--;
 			}
 			else {
@@ -766,6 +785,8 @@ void* _handle_new_loop(void* data) {
 			}
 			duration += timestamps[i] - timestamps[i-1];
 		}
+		/* TODO: why not just take beginning and end timestamp to get duration? */
+		LOG_DEBUG("remaining duration of loop %d frames consisting of %f seconds", frame_count, duration);
 	}
 
 	/* find nearest duration to valid durations */
@@ -781,6 +802,7 @@ void* _handle_new_loop(void* data) {
 				break;
 			}
 		}
+		LOG_DEBUG("closest match to loop duration is %f", closest_duration);
 	
 		if (closest_duration < 0.0) {
 			LOG_WARNING("could not match video duration");
@@ -805,11 +827,13 @@ void* _handle_new_loop(void* data) {
 			}
 		}
 		frame_count = last_frame;
+		LOG_DEBUG("removed trailing frames, now %d frames remaining", frame_count);
 	}
 
 
 	/* check that enough frames left */
 	if (frame_count < director->loop_min_frame_count) {
+		LOG_INFO("too few frames to consist of a valid loop %d < %d", frame_count, director->loop_min_frame_count);
 		valid_video = FALSE;
 	}
 
@@ -821,6 +845,7 @@ void* _handle_new_loop(void* data) {
 			/* randomly remove an older loop */
 			loop_to_remove = rand() % (loop_count / 2 + 1);
 			/* TODO: if this causes glitches, could make a "remove loop queue" */
+			LOG_DEBUG("removing existing loop at index %d", loop_to_remove);
 			status = _director_free_loop(director, loop_to_remove);
 		}
 		if (NO_ERROR == status) {
