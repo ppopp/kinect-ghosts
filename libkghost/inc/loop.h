@@ -56,6 +56,10 @@ extern "C" {
 		size_t from_frame,
 		size_t to_frame,
 		timestamp_t* p_timestamp);
+
+	status_t loop_duration(
+		loop_t* p_loop,
+		timestamp_t* p_duration);
 	/** @} */
 
 #ifdef __cplusplus

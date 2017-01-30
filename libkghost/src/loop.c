@@ -305,3 +305,36 @@ status_t loop_frame_timestamp_delta(
 	return NO_ERROR;
 }
 
+status_t loop_duration(loop_t* p_loop, timestamp_t* p_duration) {
+	status_t    status = NO_ERROR;
+	timestamp_t time   = 0;
+	size_t      frames = 0;
+
+	if ((NULL == p_loop) || (NULL == p_duration)) {
+		return ERR_NULL_POINTER;
+	}
+
+	status = vector_count(p_loop->timestamps, &frames);
+	if (NO_ERROR != status) {
+		return status;
+	}
+	if (frames < 2) {
+		*p_duration = 0;
+		return NO_ERROR;
+	}
+
+	status = vector_element_copy(p_loop->timestamps, 0, &time);
+	if (NO_ERROR != status) {
+		return status;
+	}
+	status = vector_element_copy(p_loop->timestamps, frames - 1, p_duration);
+	if (NO_ERROR != status) {
+		return status;
+	}
+	if ((*p_duration) < time) {
+		return ERR_INVALID_TIMESTAMP;
+	}
+	(*p_duration) -= time;
+	return NO_ERROR;
+}
+

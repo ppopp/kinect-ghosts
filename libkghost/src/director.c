@@ -11,7 +11,6 @@
 #include <pthread.h>
 
 /* TODO: loops could be more musical.  simple loop logic should do */
-/* TODO: make a maximum loop frame count to keep loops from getting too big */
 /* TODO: handle out of memory issues by releasing stuff. */
 /* TODO: have process controlling # of layers. */
 
@@ -59,6 +58,9 @@ typedef struct director_s {
 	void* live_video;
 	void* live_depth;
 	float live_cutoff;
+
+	timestamp_t layer_count_timer;
+	unsigned layer_count;
 
 	frame_store_handle_t frame_store;
 	vector_handle_t loops;
@@ -127,7 +129,9 @@ status_t director_create(
 	p_director->valid_frame_patience = 25;
 	p_director->invalid_frame_count = 0;
 	p_director->loop_min_frame_count = 10;
-	p_director->max_loops = 10;
+	p_director->max_loops = 20;
+	p_director->layer_count_timer = 0.0;
+	p_director->layer_count = max_layers;
 	p_director->is_recording = FALSE;
 	p_director->live_video = NULL;
 	p_director->live_depth = NULL;
@@ -254,13 +258,30 @@ status_t director_playback_layers(
 		pthread_mutex_unlock(&(handle->loops_mutex));
 		return NO_ERROR;
 	}
-	
+
+	/* update number of target layers */
+	handle->layer_count_timer += delta;
+	if (handle->layer_count_timer >= _valid_durations[_valid_duration_count - 1]) {
+		handle->layer_count_timer -= _valid_durations[_valid_duration_count - 1];
+		/* doing a random walk, either add 1, remove 1 or leave */
+		handle->layer_count += ((rand() % 3) - 1);
+		if (handle->layer_count < 2) {
+			handle->layer_count = 2;
+		}
+		if (handle->layer_count > handle->max_layers) {
+			handle->layer_count = handle->max_layers;
+		}
+		LOG_INFO("updated layer count: %d", handle->layer_count);
+	}
+
 	/* fill any empty loops */
 	max_layers = handle->max_layers - 1;
 
 	for (input_layer_index = 0; input_layer_index < max_layers; input_layer_index++) {
 		/* check if loop is free */
-		if (NULL == handle->playing_loops[input_layer_index]) {
+		if ((NULL == handle->playing_loops[input_layer_index]) && 
+			(input_layer_index < (handle->layer_count - 1)))
+		{
 			/* choose random loop */
 			status = vector_element_copy(
 				handle->loops, 
@@ -444,6 +465,7 @@ status_t _director_handle_new_frame(
 	double         motion        = 0.0;
 	double         presence      = 0.0;
 	timestamp_t    timestamp     = 0;
+	timestamp_t    duration      = 0;
 
 	p_loop = p_director->p_current_loop;
 
@@ -546,6 +568,15 @@ status_t _director_handle_new_frame(
 		pthread_mutex_lock(&(p_director->frame_store_mutex));
 		status = frame_store_remove_frame(p_director->frame_store, frame_id);
 		pthread_mutex_unlock(&(p_director->frame_store_mutex));
+	}
+
+	/* check if loop has reached it's maximum duration */
+	status = loop_duration(p_loop, &duration);
+	if (NO_ERROR != status) {
+		return status;
+	}
+	if (duration > _valid_durations[_valid_duration_count - 1]) {
+		loop_ended = TRUE;
 	}
 
 	if (TRUE == loop_ended) {

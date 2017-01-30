@@ -143,7 +143,8 @@ status_t _init_opengl(
 	 * buffers offer fast streaming of data from the kinect to the graphics
 	 * card */
 	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_DST_COLOR); 
+	//glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_DST_COLOR); 
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_COLOR); 
 	//glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE);
 	glDisable(GL_DEPTH_TEST);
 

@@ -53,12 +53,12 @@ float add_sampler(
 	float depth = texture2D(depth_texture, texcoord).a;
 	float alpha = smooth_alpha(depth, depth_cutoff);
 
-	if (alpha > 0.1) {
-		alpha = 0.5;
-	}
+	//if (alpha > 0.1) {
+		//alpha = 0.5;
+	//}
 
 	if (depth != 0.0) {
-		//if (depth < best_depth) {
+		if (depth < best_depth) {
 			if (alpha > 0.0) {
 				new_color = texture2D(video_texture, texcoord);
 				new_color.a = alpha;
@@ -66,16 +66,16 @@ float add_sampler(
 					gl_FragColor = new_color;
 				}
 				else if (gl_FragColor.a > 0.1) {
-					//gl_FragColor = (gl_FragColor + new_color);
+					gl_FragColor = (gl_FragColor + new_color);
 					gl_FragColor = new_color;
 				}
 				else {
-					//gl_FragColor = (gl_FragColor + new_color);
-					gl_FragColor = new_color;
+					gl_FragColor = (gl_FragColor + new_color);
+					//gl_FragColor = new_color;
 				}
 				return depth;
 			}
-		//}
+		}
 		else if (gl_FragColor.a < 1.0) {
 			new_color = texture2D(video_texture, texcoord);
 			new_color.a = alpha;
