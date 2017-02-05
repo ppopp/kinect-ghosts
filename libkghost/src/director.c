@@ -74,6 +74,7 @@ typedef struct director_s {
 static status_t _director_handle_new_frame(director_t* p_director, frame_id_t frame_id);
 static status_t _director_handle_new_loop(director_t* p_director, loop_t* p_loop);
 static status_t _director_free_loop(director_t* p_director, size_t loop_index);
+static status_t _director_handle_empty_memory_pool(director_t* p_director);
 
 /* thread data used to handle new loops */
 typedef struct thread_data_s {
@@ -388,6 +389,10 @@ status_t director_capture_video(
 		return ERR_NULL_POINTER;
 	}
 
+	/* TODO: if we run out of memory in the memory pool, those errors show
+	 * up at the output of these frame_store_capture_* calls.
+	 */
+
 	pthread_mutex_lock(&(handle->frame_store_mutex));
 	status = frame_store_capture_video(
 		handle->frame_store, 
@@ -395,6 +400,10 @@ status_t director_capture_video(
 		timestamp,
 		&frame_id);
 	pthread_mutex_unlock(&(handle->frame_store_mutex));
+	if (ERR_EMPTY == status) {
+		/* the memory pool has run out of memory */
+		status = _director_handle_empty_memory_pool(handle);
+	}
 	if (NO_ERROR != status) {
 		return status;
 	}
@@ -425,16 +434,18 @@ status_t director_capture_depth(
 		data, 
 		timestamp,
 		&frame_id);
-	if (NO_ERROR != status) {
-		pthread_mutex_unlock(&(handle->frame_store_mutex));
-		return status;
+	if (NO_ERROR == status) {
+		status = frame_store_capture_meta(
+			handle->frame_store, 
+			(void*)&cutoff, 
+			timestamp,
+			&frame_id);
 	}
-	status = frame_store_capture_meta(
-		handle->frame_store, 
-		(void*)&cutoff, 
-		timestamp,
-		&frame_id);
 	pthread_mutex_unlock(&(handle->frame_store_mutex));
+	if (ERR_EMPTY == status) {
+		/* the memory pool has run out of memory */
+		status = _director_handle_empty_memory_pool(handle);
+	}
 	if (NO_ERROR != status) {
 		return status;
 	}
@@ -469,6 +480,9 @@ status_t _director_handle_new_frame(
 
 	p_loop = p_director->p_current_loop;
 
+	/* TODO: free memory if too full. On error free a random loop
+	 * as well as the current loop 
+	 */
 	/* retrieve frame from frame store */
 	pthread_mutex_lock(&(p_director->frame_store_mutex));
 	status = frame_store_video_frame(
@@ -588,7 +602,9 @@ status_t _director_handle_new_frame(
 			}
 		}
 		else {
+			pthread_mutex_lock(&(p_director->frame_store_mutex));
 			loop_release(p_loop);	
+			pthread_mutex_unlock(&(p_director->frame_store_mutex));
 		}
 		/* prepare director for next loop */
 		p_director->p_current_loop = NULL;
@@ -647,9 +663,48 @@ status_t _director_free_loop(director_t* p_director, size_t loop_index) {
 		return status;
 	}
 	/* free loop */
+	pthread_mutex_lock(&(p_director->frame_store_mutex));
 	loop_release(p_loop);
+	pthread_mutex_unlock(&(p_director->frame_store_mutex));
 
 	return NO_ERROR;
+}
+
+status_t _director_handle_empty_memory_pool(director_t* director) {
+	/* TODO* */
+	status_t status = NO_ERROR;
+	size_t loop_count = 0;
+	size_t loop_to_remove = 0;
+	loop_t* p_loop = NULL;
+
+	/* remove a random loop */
+	pthread_mutex_lock(&(director->loops_mutex));
+	status = vector_count(director->loops, &loop_count);
+	if (loop_count > 1) {
+		/* randomly remove an older loop */
+		loop_to_remove = rand() % (loop_count / 2 + 1);
+		/* TODO: if this causes glitches, could make a "remove loop queue" */
+		LOG_DEBUG("removing existing loop at index %d", loop_to_remove);
+		status = _director_free_loop(director, loop_to_remove);
+	}
+	/* unlock thread to protect loop vector */
+	pthread_mutex_unlock(&(director->loops_mutex));
+	if (NO_ERROR != status) {
+		return status;
+	}
+
+	/* clear current loop */
+	/* TODO: mutex? */
+	p_loop = director->p_current_loop;
+	director->p_current_loop = NULL;
+	pthread_mutex_lock(&(director->frame_store_mutex));
+	loop_release(p_loop);
+	pthread_mutex_unlock(&(director->frame_store_mutex));
+
+	status = loop_create(director->frame_store, &(director->p_current_loop));
+
+	return status;
+
 }
 
 status_t _thread_data_create(
@@ -894,7 +949,10 @@ void* _handle_new_loop(void* data) {
 	free(frame_ids);
 
 	if (NO_ERROR != status) {
+		pthread_mutex_lock(&(director->frame_store_mutex));
 		loop_release(p_td->loop);
+		pthread_mutex_unlock(&(director->frame_store_mutex));
+
 		LOG_ERROR("[%d][%s]", status, error_string(status));
 	}
 	_thread_data_release(p_td);
